@@ -1,5 +1,6 @@
 const express = require('express');
 const User = require('../models/User');
+const AuditLog = require('../models/AuditLog');
 
 const router = express.Router();
 
@@ -45,6 +46,13 @@ router.post('/signup', async (req, res) => {
       mobile,
       address,
       password
+    });
+
+    await AuditLog.create({
+      eventType: 'signup',
+      email: normalizedEmail,
+      status: 'success',
+      details: 'User signup completed'
     });
 
     return res.status(201).json({
@@ -98,6 +106,13 @@ router.post('/login', async (req, res) => {
         message: 'Invalid password'
       });
     }
+
+    await AuditLog.create({
+      eventType: 'login',
+      email: normalizedEmail,
+      status: 'success',
+      details: 'User login completed'
+    });
 
     return res.json({
       success: true,
