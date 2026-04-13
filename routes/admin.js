@@ -4,6 +4,8 @@ const User = require('../models/User');
 const License = require('../models/License');
 const Payment = require('../models/Payment');
 const AuditLog = require('../models/AuditLog');
+const { sendLicenseEmail } = require('../services/emailService');
+const { generateLicenseKey, getLicenseExpiry } = require('../services/licenseService');
 
 const router = express.Router();
 
@@ -17,17 +19,157 @@ router.get('/users', adminAuth, async (req, res) => {
   }
 });
 
+router.patch('/user/:id/disable', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.isActive = false;
+    await user.save();
+
+    await AuditLog.create({
+      eventType: 'user_disabled',
+      email: user.email,
+      status: 'success',
+      details: `Admin disabled user ${user._id}`
+    });
+
+    res.json({ success: true, message: 'User disabled successfully', user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.patch('/user/:id/enable', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.isActive = true;
+    await user.save();
+
+    await AuditLog.create({
+      eventType: 'user_enabled',
+      email: user.email,
+      status: 'success',
+      details: `Admin enabled user ${user._id}`
+    });
+
+    res.json({ success: true, message: 'User enabled successfully', user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.delete('/user/:id', adminAuth, async (req, res) => {
   try {
-    await User.findByIdAndDelete(req.params.id);
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    await License.deleteMany({ userId: user._id });
+    await User.findByIdAndDelete(user._id);
+
     await AuditLog.create({
       eventType: 'user_deleted',
-      email: '',
+      email: user.email,
       status: 'success',
-      details: `Admin deleted user ${req.params.id}`
+      details: `Admin deleted user ${user._id} and related licenses`
     });
+
     res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// CREATE LICENSE DIRECTLY FROM USER ROW
+router.post('/user/:id/create-license', adminAuth, async (req, res) => {
+  try {
+    const { plan = 'Monthly', validDays = 30 } = req.body || {};
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const licenseKey = generateLicenseKey('SBU');
+    const validUntil = getLicenseExpiry(validDays);
+
+    const license = await License.create({
+      userId: user._id,
+      email: user.email,
+      licenseKey,
+      productName: 'Sembhi Bot Ultimate',
+      plan,
+      status: 'active',
+      activatedDevices: 0,
+      maxDevices: 1,
+      machineId: '',
+      machineName: '',
+      orderId: `ADMIN-${Date.now()}`,
+      stripeSessionId: `admin-manual-${Date.now()}`,
+      validFrom: new Date(),
+      validUntil
+    });
+
+    await AuditLog.create({
+      eventType: 'license_manual_created',
+      email: user.email,
+      status: 'success',
+      details: `Admin created license ${license.licenseKey} from user row`
+    });
+
+    res.json({
+      success: true,
+      message: 'License created successfully',
+      license
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// RESEND LICENSE EMAIL FROM USER ROW
+router.post('/user/:id/resend-email', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const license = await License.findOne({ email: user.email, status: 'active' }).sort({ createdAt: -1 });
+    if (!license) {
+      return res.status(404).json({ success: false, message: 'No active license found for this user' });
+    }
+
+    await sendLicenseEmail({
+      to: user.email,
+      name: user.name || 'User',
+      licenseKey: license.licenseKey,
+      validUntil: license.validUntil
+    });
+
+    await AuditLog.create({
+      eventType: 'email_resent',
+      email: user.email,
+      status: 'success',
+      details: `License email resent for ${license.licenseKey}`
+    });
+
+    res.json({ success: true, message: 'License email resent successfully' });
+  } catch (error) {
+    await AuditLog.create({
+      eventType: 'email_resend_failed',
+      email: '',
+      status: 'failed',
+      details: error.message
+    }).catch(() => {});
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -85,11 +227,7 @@ router.post('/license/create', adminAuth, async (req, res) => {
       details: `Manual license created: ${license.licenseKey}`
     });
 
-    res.json({
-      success: true,
-      message: 'Manual license created successfully',
-      license
-    });
+    res.json({ success: true, message: 'Manual license created successfully', license });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -110,7 +248,6 @@ router.patch('/license/:id/renew', adminAuth, async (req, res) => {
         : new Date();
 
     baseDate.setDate(baseDate.getDate() + Number(days));
-
     license.validUntil = baseDate;
     license.status = 'active';
     await license.save();
@@ -122,11 +259,7 @@ router.patch('/license/:id/renew', adminAuth, async (req, res) => {
       details: `License renewed by ${days} days`
     });
 
-    res.json({
-      success: true,
-      message: 'License renewed successfully',
-      license
-    });
+    res.json({ success: true, message: 'License renewed successfully', license });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -135,7 +268,6 @@ router.patch('/license/:id/renew', adminAuth, async (req, res) => {
 router.patch('/license/:id/activate', adminAuth, async (req, res) => {
   try {
     const license = await License.findById(req.params.id);
-
     if (!license) {
       return res.status(404).json({ success: false, message: 'License not found' });
     }
@@ -150,11 +282,7 @@ router.patch('/license/:id/activate', adminAuth, async (req, res) => {
       details: `License activated: ${license.licenseKey}`
     });
 
-    res.json({
-      success: true,
-      message: 'License activated successfully',
-      license
-    });
+    res.json({ success: true, message: 'License activated successfully', license });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -163,7 +291,6 @@ router.patch('/license/:id/activate', adminAuth, async (req, res) => {
 router.patch('/license/:id/deactivate', adminAuth, async (req, res) => {
   try {
     const license = await License.findById(req.params.id);
-
     if (!license) {
       return res.status(404).json({ success: false, message: 'License not found' });
     }
@@ -178,11 +305,7 @@ router.patch('/license/:id/deactivate', adminAuth, async (req, res) => {
       details: `License deactivated: ${license.licenseKey}`
     });
 
-    res.json({
-      success: true,
-      message: 'License deactivated successfully',
-      license
-    });
+    res.json({ success: true, message: 'License deactivated successfully', license });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -191,7 +314,6 @@ router.patch('/license/:id/deactivate', adminAuth, async (req, res) => {
 router.patch('/license/:id/reset-machine', adminAuth, async (req, res) => {
   try {
     const license = await License.findById(req.params.id);
-
     if (!license) {
       return res.status(404).json({ success: false, message: 'License not found' });
     }
@@ -209,11 +331,7 @@ router.patch('/license/:id/reset-machine', adminAuth, async (req, res) => {
       details: `Machine reset for ${license.licenseKey}`
     });
 
-    res.json({
-      success: true,
-      message: 'Machine reset successful',
-      license
-    });
+    res.json({ success: true, message: 'Machine reset successful', license });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
