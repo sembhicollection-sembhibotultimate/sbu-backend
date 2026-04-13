@@ -73,13 +73,13 @@ router.post('/validate', async (req, res) => {
       });
     }
 
-    // First activation / machine bind
+    // First machine bind
     if (!license.machineId && machineId) {
       license.machineId = machineId;
       license.machineName = machineName || '';
       license.activatedDevices = 1;
     }
-    // Different machine blocked
+    // If already linked to another machine
     else if (license.machineId && machineId && license.machineId !== machineId) {
       await AuditLog.create({
         eventType: 'bot_activation_failed',
