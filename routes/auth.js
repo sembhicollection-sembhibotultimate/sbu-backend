@@ -45,7 +45,8 @@ router.post('/signup', async (req, res) => {
       email: normalizedEmail,
       mobile,
       address,
-      password
+      password,
+      isActive: true
     });
 
     await AuditLog.create({
@@ -67,6 +68,7 @@ router.post('/signup', async (req, res) => {
         email: user.email,
         mobile: user.mobile,
         address: user.address,
+        isActive: user.isActive,
         plan: '$149/month'
       }
     });
@@ -94,13 +96,42 @@ router.post('/login', async (req, res) => {
     const user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
+      await AuditLog.create({
+        eventType: 'login_failed',
+        email: normalizedEmail,
+        status: 'failed',
+        details: 'User not found'
+      });
+
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
 
+    // 🔴 DISABLE USER LOGIN CHECK
+    if (user.isActive === false) {
+      await AuditLog.create({
+        eventType: 'login_blocked',
+        email: normalizedEmail,
+        status: 'blocked',
+        details: 'Disabled user tried to login'
+      });
+
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been disabled. Please contact admin.'
+      });
+    }
+
     if (user.password !== password) {
+      await AuditLog.create({
+        eventType: 'login_failed',
+        email: normalizedEmail,
+        status: 'failed',
+        details: 'Invalid password'
+      });
+
       return res.status(401).json({
         success: false,
         message: 'Invalid password'
@@ -126,8 +157,8 @@ router.post('/login', async (req, res) => {
         email: user.email,
         mobile: user.mobile,
         address: user.address,
-        plan: '$149/month',
-        licenseKey: user.licenseKey || ''
+        isActive: user.isActive,
+        plan: '$149/month'
       }
     });
   } catch (error) {
