@@ -143,9 +143,16 @@ router.post('/user/:id/resend-email', adminAuth, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    const license = await License.findOne({ email: user.email, status: 'active' }).sort({ createdAt: -1 });
+    const license = await License.findOne({
+      email: user.email,
+      status: 'active'
+    }).sort({ createdAt: -1 });
+
     if (!license) {
-      return res.status(404).json({ success: false, message: 'No active license found for this user' });
+      return res.status(404).json({
+        success: false,
+        message: 'No active license found for this user'
+      });
     }
 
     await sendLicenseEmail({
@@ -162,7 +169,10 @@ router.post('/user/:id/resend-email', adminAuth, async (req, res) => {
       details: `License email resent for ${license.licenseKey}`
     });
 
-    res.json({ success: true, message: 'License email resent successfully' });
+    res.json({
+      success: true,
+      message: 'License email resent successfully'
+    });
   } catch (error) {
     await AuditLog.create({
       eventType: 'email_resend_failed',
@@ -170,7 +180,11 @@ router.post('/user/:id/resend-email', adminAuth, async (req, res) => {
       status: 'failed',
       details: error.message
     }).catch(() => {});
-    res.status(500).json({ success: false, message: error.message });
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 });
 
@@ -217,7 +231,9 @@ router.post('/license/create', adminAuth, async (req, res) => {
       orderId: `MANUAL-${Date.now()}`,
       stripeSessionId: `manual-${Date.now()}`,
       validFrom: new Date(),
-      validUntil: validUntil ? new Date(validUntil) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      validUntil: validUntil
+        ? new Date(validUntil)
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
     });
 
     await AuditLog.create({
