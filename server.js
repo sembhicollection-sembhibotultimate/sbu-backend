@@ -6,6 +6,8 @@ const connectDB = require('./utils/db');
 const adminRoutes = require('./routes/admin');
 const portalRoutes = require('./routes/portal');
 const webhookRoutes = require('./routes/webhook');
+const authRoutes = require('./routes/auth');
+const checkoutRoutes = require('./routes/checkout');
 
 const app = express();
 
@@ -28,6 +30,8 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.use('/api/auth', authRoutes);
+app.use('/api', checkoutRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/portal', portalRoutes);
 
