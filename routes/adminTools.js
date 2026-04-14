@@ -9,13 +9,14 @@ const AuditLog = require('../models/AuditLog');
 
 const router = express.Router();
 
+
 // ---------- EMAIL TEMPLATES ----------
 const DEFAULT_TEMPLATES = [
   {
     key: 'license_issue',
     name: 'License Issue',
     subject: 'Your Sembhi Bot Ultimate License',
-    body: 'Hello {name},
+    body: `Hello {name},
 
 Your payment was successful.
 
@@ -23,28 +24,43 @@ License Key: {licenseKey}
 Plan: {plan}
 Valid Until: {validUntil}
 
-Thank you for choosing Sembhi Bot Ultimate.',
+Thank you for choosing Sembhi Bot Ultimate.`,
     isActive: true
   },
   {
     key: 'renewal',
     name: 'Renewal Reminder',
     subject: 'Renewal Reminder',
-    body: 'Hello {name},\n\nYour plan {plan} is due for renewal soon.\n\nRegards,\nSBU Support',
+    body: `Hello {name},
+
+Your plan {plan} is due for renewal soon.
+
+Regards,
+SBU Support`,
     isActive: true
   },
   {
     key: 'disabled_account',
     name: 'Disabled Account',
     subject: 'Account Disabled Notice',
-    body: 'Hello {name},\n\nYour account is currently disabled. Please contact support for help.\n\nRegards,\nSBU Support',
+    body: `Hello {name},
+
+Your account is currently disabled. Please contact support for help.
+
+Regards,
+SBU Support`,
     isActive: true
   },
   {
     key: 'manual_support',
     name: 'Manual Support',
     subject: 'Support Update',
-    body: 'Hello {name},\n\nWe are updating you regarding your support request.\n\nRegards,\nSBU Support',
+    body: `Hello {name},
+
+We are updating you regarding your support request.
+
+Regards,
+SBU Support`,
     isActive: true
   }
 ];
