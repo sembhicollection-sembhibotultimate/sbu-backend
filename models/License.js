@@ -8,6 +8,9 @@ const licenseSchema = new mongoose.Schema(
 
     productName: { type: String, default: 'Sembhi Bot Ultimate' },
     plan: { type: String, default: 'Monthly' },
+    licenseType: { type: String, enum: ['customer', 'owner'], default: 'customer', index: true },
+    ownerLifetime: { type: Boolean, default: false },
+    allowUnlimitedDevices: { type: Boolean, default: false },
 
     status: {
       type: String,
