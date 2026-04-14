@@ -250,48 +250,10 @@ router.patch('/template/:id', adminAuth, async (req, res) => {
 // ---------- ADMIN SETTINGS ----------
 const DEFAULT_SETTINGS = [
   { key: 'business_name', value: 'Sembhi Bot Ultimate', category: 'branding' },
-  { key: 'business_tagline', value: 'Professional Trading Automation Platform', category: 'branding' },
-  { key: 'logo_url', value: '', category: 'branding' },
-  { key: 'logo_width', value: '220', category: 'branding' },
-  { key: 'logo_height', value: '54', category: 'branding' },
-  { key: 'support_email', value: 'support@sembhibotultimate.com', category: 'contact' },
+  { key: 'support_email', value: 'sembhibotultimate@gmail.com', category: 'contact' },
   { key: 'support_phone', value: '0432 563 568', category: 'contact' },
-  { key: 'support_whatsapp', value: '', category: 'contact' },
-  { key: 'support_facebook', value: '', category: 'social' },
-  { key: 'support_instagram', value: '', category: 'social' },
-  { key: 'support_tiktok', value: '', category: 'social' },
-  { key: 'support_youtube', value: '', category: 'social' },
-  { key: 'support_linkedin', value: '', category: 'social' },
   { key: 'business_location', value: 'Melbourne, Australia', category: 'contact' },
-  { key: 'admin_name', value: 'Site Owner', category: 'admin_profile' },
-  { key: 'admin_email', value: 'support@sembhibotultimate.com', category: 'admin_profile' },
-  { key: 'admin_mobile', value: '', category: 'admin_profile' },
-  { key: 'default_currency', value: 'AUD', category: 'billing' },
-  { key: 'offer_enabled', value: true, category: 'offer' },
-  { key: 'offer_title', value: 'NEW PRODUCTS EVALS UP TO 20% OFF', category: 'offer' },
-  { key: 'offer_subtitle', value: 'Use Code "SBU20"', category: 'offer' },
-  { key: 'offer_code', value: 'SBU20', category: 'offer' },
-  { key: 'offer_button_text', value: 'Coupon "SBU20"', category: 'offer' },
-  { key: 'offer_end_at', value: '', category: 'offer' },
-  { key: 'disclaimer_short', value: 'Futures trading involves substantial risk and is not suitable for every investor. Sembhi Bot Ultimate provides software tools and educational content only and does not provide personal financial advice.', category: 'legal' },
-  { key: 'about_title', value: 'Experience, Strategy, Discipline — Your Edge in the Futures Market.', category: 'content' },
-  { key: 'about_body', value: 'Sembhi Bot Ultimate supports futures traders with structured automation tools, educational guidance, and disciplined execution models focused on markets such as NQ, ES, YM, and GC. We do not provide personal financial advice. All examples, walkthroughs, and tools are provided for educational and analytical purposes only.', category: 'content' },
-  { key: 'how_title', value: 'Learn the reasoning behind every entry and exit.', category: 'content' },
-  { key: 'how_body', value: 'Members can review educational content, platform walkthroughs, and structured trading concepts designed to improve discipline and process.', category: 'content' },
-  { key: 'training_title', value: 'Learn Futures Trading Step-by-Step', category: 'content' },
-  { key: 'training_body', value: 'Access structured tutorials covering market fundamentals, risk management, platform setup, and live examples.', category: 'content' },
-  { key: 'plan_name', value: 'Premium Membership', category: 'plan' },
-  { key: 'plan_price', value: '149', category: 'plan' },
-  { key: 'plan_currency', value: '$', category: 'plan' },
-  { key: 'plan_period', value: '/ month', category: 'plan' },
-  { key: 'performance_engine_name', value: 'Sembhi Performance Engine', category: 'future' },
-  { key: 'trade_copier_name', value: 'Sembhi Trade Copier Free', category: 'future' },
-  { key: 'platform_offers', value: [
-    { name: 'Apex Trader Funding', badge: '80% OFF', desc: 'Enjoy deep discounts on evaluation accounts, perfect for both new and experienced traders.', coupon: 'RAJA1156', cta: 'Get Discount', url: '#', tag: 'BEST DEAL' },
-    { name: 'Take Profit Trader', badge: '40% OFF', desc: 'Affordable and fast funding opportunities with trader-friendly rules.', coupon: 'RAJA1156', cta: 'Get Discount', url: '#', tag: 'POPULAR' },
-    { name: 'Trade Day', badge: '40% OFF', desc: 'Flexible programs designed for consistent profits and growth.', coupon: 'RAJA1156', cta: 'Get Discount', url: '#', tag: 'LIMITED' },
-    { name: 'Funding Ticks', badge: '50% OFF', desc: 'FundingTicks provides industry leading platforms, copy trading and weekly rewards.', coupon: 'RAJA1156', cta: 'Get Discount', url: '#', tag: 'LIMITED' }
-  ], category: 'offers' }
+  { key: 'default_currency', value: 'AUD', category: 'billing' }
 ];
 
 router.post('/settings/seed', adminAuth, async (req, res) => {
@@ -345,53 +307,6 @@ router.patch('/setting/:id', adminAuth, async (req, res) => {
     });
 
     return res.json({ success: true, message: 'Setting updated successfully', setting });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-
-router.get('/settings-map', adminAuth, async (req, res) => {
-  try {
-    const settings = await AdminSetting.find().sort({ key: 1 });
-    const map = {};
-    settings.forEach((row) => { map[row.key] = row.value; });
-    return res.json({ success: true, settings: map });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-router.post('/settings/bulk', adminAuth, async (req, res) => {
-  try {
-    const { settings = [] } = req.body || {};
-    if (!Array.isArray(settings)) {
-      return res.status(400).json({ success: false, message: 'settings array is required' });
-    }
-
-    const results = [];
-    for (const item of settings) {
-      if (!item || !item.key) continue;
-      const updated = await AdminSetting.findOneAndUpdate(
-        { key: String(item.key).trim() },
-        {
-          key: String(item.key).trim(),
-          value: item.value,
-          category: item.category || 'general'
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
-      results.push(updated);
-    }
-
-    await AuditLog.create({
-      eventType: 'settings_bulk_updated',
-      email: '',
-      status: 'success',
-      details: `Bulk updated ${results.length} settings`
-    });
-
-    return res.json({ success: true, message: 'Settings saved successfully', settings: results });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
