@@ -16,6 +16,10 @@ function getLicenseExpiry(days) {
   return d;
 }
 
+function getOwnerLifetimeDate() {
+  return new Date('2099-12-31T23:59:59.000Z');
+}
+
 function extendFromBaseDate(baseDate, days) {
   const d = new Date(baseDate || new Date());
   d.setDate(d.getDate() + Number(days || 30));
@@ -88,15 +92,20 @@ async function createLicenseForUser({
   stripeSessionId = '',
   stripeCustomerId = '',
   stripeSubscriptionId = '',
-  validDays = 30
+  validDays = 30,
+  licenseType = 'customer',
+  allowUnlimitedDevices = false,
+  ownerLifetime = false,
+  maxDevices = 1,
+  keyPrefix = 'SBU'
 }) {
   const normalizedEmail = String(email || user?.email || '').toLowerCase().trim();
   if (!user?._id || !normalizedEmail) {
     throw new Error('User and email are required to create license');
   }
 
-  const licenseKey = generateLicenseKey('SBU');
-  const validUntil = getLicenseExpiry(validDays);
+  const licenseKey = generateLicenseKey(keyPrefix);
+  const validUntil = ownerLifetime ? getOwnerLifetimeDate() : getLicenseExpiry(validDays);
 
   const license = await License.create({
     userId: user._id,
@@ -104,9 +113,12 @@ async function createLicenseForUser({
     licenseKey,
     productName: 'Sembhi Bot Ultimate',
     plan,
+    licenseType,
+    ownerLifetime,
+    allowUnlimitedDevices,
     status: 'active',
     activatedDevices: 0,
-    maxDevices: 1,
+    maxDevices: allowUnlimitedDevices ? 999999 : maxDevices,
     machineId: '',
     machineName: '',
     orderId,
@@ -120,6 +132,28 @@ async function createLicenseForUser({
   return license;
 }
 
+async function createOwnerLicense({
+  user,
+  email,
+  plan = 'Owner Lifetime'
+}) {
+  return createLicenseForUser({
+    user,
+    email,
+    plan,
+    orderId: `OWNER-${Date.now()}`,
+    stripeSessionId: '',
+    stripeCustomerId: '',
+    stripeSubscriptionId: '',
+    validDays: 3650,
+    licenseType: 'owner',
+    allowUnlimitedDevices: true,
+    ownerLifetime: true,
+    maxDevices: 999999,
+    keyPrefix: 'SBUOWN'
+  });
+}
+
 async function renewExistingLicense({
   license,
   days = 30,
@@ -131,14 +165,19 @@ async function renewExistingLicense({
     throw new Error('License is required for renewal');
   }
 
-  const now = new Date();
-  const baseDate =
-    license.validUntil && new Date(license.validUntil) > now
-      ? new Date(license.validUntil)
-      : now;
+  if (license.ownerLifetime) {
+    license.status = 'active';
+    license.validUntil = getOwnerLifetimeDate();
+  } else {
+    const now = new Date();
+    const baseDate =
+      license.validUntil && new Date(license.validUntil) > now
+        ? new Date(license.validUntil)
+        : now;
 
-  license.validUntil = extendFromBaseDate(baseDate, days);
-  license.status = 'active';
+    license.validUntil = extendFromBaseDate(baseDate, days);
+    license.status = 'active';
+  }
 
   if (stripeSubscriptionId) license.stripeSubscriptionId = stripeSubscriptionId;
   if (stripeCustomerId) license.stripeCustomerId = stripeCustomerId;
@@ -151,9 +190,11 @@ async function renewExistingLicense({
 module.exports = {
   generateLicenseKey,
   getLicenseExpiry,
+  getOwnerLifetimeDate,
   extendFromBaseDate,
   findOrCreateUser,
   getActiveOrLatestLicenseByEmail,
   createLicenseForUser,
+  createOwnerLicense,
   renewExistingLicense
 };
