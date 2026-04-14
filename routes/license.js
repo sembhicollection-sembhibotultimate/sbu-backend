@@ -55,7 +55,7 @@ router.post('/validate', async (req, res) => {
       });
     }
 
-    if (!license.ownerLifetime && license.validUntil && new Date(license.validUntil) < new Date()) {
+    if (license.validUntil && new Date(license.validUntil) < new Date()) {
       license.status = 'expired';
       await license.save();
 
@@ -73,13 +73,14 @@ router.post('/validate', async (req, res) => {
       });
     }
 
-    if (license.allowUnlimitedDevices || license.licenseType === 'owner' || license.ownerLifetime) {
-      license.activatedDevices = Math.max(Number(license.activatedDevices || 0), 1);
-    } else if (!license.machineId && machineId) {
+    // First machine bind
+    if (!license.machineId && machineId) {
       license.machineId = machineId;
       license.machineName = machineName || '';
       license.activatedDevices = 1;
-    } else if (license.machineId && machineId && license.machineId !== machineId) {
+    }
+    // If already linked to another machine
+    else if (license.machineId && machineId && license.machineId !== machineId) {
       await AuditLog.create({
         eventType: 'bot_activation_failed',
         email: license.email,
@@ -119,10 +120,7 @@ router.post('/validate', async (req, res) => {
         machineId: license.machineId,
         machineName: license.machineName,
         activatedDevices: license.activatedDevices,
-        maxDevices: license.maxDevices,
-        licenseType: license.licenseType,
-        ownerLifetime: license.ownerLifetime,
-        allowUnlimitedDevices: license.allowUnlimitedDevices
+        maxDevices: license.maxDevices
       }
     });
   } catch (error) {
