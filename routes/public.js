@@ -1,5 +1,6 @@
 const express = require('express');
 const AdminSetting = require('../models/AdminSetting');
+const Coupon = require('../models/Coupon');
 
 const router = express.Router();
 
@@ -7,11 +8,17 @@ const DEFAULT_SITE_SETTINGS = {
   business_name: 'Sembhi Bot Ultimate',
   business_tagline: 'Professional Trading Automation Platform',
   hero_badge: 'Members Only • Premium Monthly Access',
-  hero_title: 'Sembhi Bot Ultimate — Smarter Futures Trading Starts Here',
-  hero_subtitle: 'A premium futures membership built around education, automation support, member resources, and disciplined execution in fast-moving markets.',
+  hero_title: 'Sembhi Bot Ultimate — Smarter Trading Starts Here',
+  hero_subtitle: 'A premium bot, portal, and subscription experience built for futures traders who value structure, support, and disciplined execution.',
+  cta_primary_text: 'Start Subscription',
+  cta_primary_link: '/auth/signup.html',
+  cta_secondary_text: 'Member Login',
+  cta_secondary_link: '/auth/login.html',
   logo_url: '',
-  logo_width: '240',
-  logo_height: '60',
+  logo_width: '280',
+  logo_height: '74',
+  background_image_url: '',
+  background_opacity: '0.06',
   support_email: 'support@sembhibotultimate.com',
   support_phone: '0432 563 568',
   support_whatsapp: '',
@@ -42,7 +49,7 @@ const DEFAULT_SITE_SETTINGS = {
   about_point_3_body: 'Trading involves substantial risk. Members should only trade capital they can afford to risk.',
   about_point_4_title: 'Continuous Improvement',
   about_point_4_body: 'Tools, training, and member support are refined to improve clarity and consistency over time.',
-  training_title: 'Learn Futures Trading Step by Step',
+  training_title: 'Learn Futures Trading Step-by-Step',
   training_body: 'Members get structured tutorials covering market fundamentals, execution models, risk controls, and real workflow examples.',
   performance_engine_name: 'Sembhi Performance Engine',
   trade_copier_name: 'Sembhi Trade Copier Free',
@@ -54,13 +61,13 @@ const DEFAULT_SITE_SETTINGS = {
   plan_feature_2: 'Protected bot delivery',
   plan_feature_3: 'Ongoing training and updates',
   plan_feature_4: 'Priority support structure',
-  background_image_url: '',
-  background_opacity: 0.06,
+  checkout_default_coupon: 'SBU20',
+  signup_caption: 'No coupon? Leave it blank and continue normally.',
   platform_offers: [
-    { name: 'Apex Trader Funding', badge: '80% OFF', desc: 'Discounted evaluation access for futures traders who want lower entry cost and strong funding variety.', coupon: 'SBU20', cta: 'Get Discount', url: '#', tag: 'BEST DEAL' },
-    { name: 'Take Profit Trader', badge: '40% OFF', desc: 'Fast-track funding option with member-focused savings and practical rule structure.', coupon: 'SBU20', cta: 'Get Discount', url: '#', tag: 'POPULAR' },
-    { name: 'Trade Day', badge: '40% OFF', desc: 'Structured evaluation environment built for traders chasing consistency and growth.', coupon: 'SBU20', cta: 'Get Discount', url: '#', tag: 'LIMITED' },
-    { name: 'Funding Ticks', badge: '50% OFF', desc: 'Member savings on evaluation-style access, platform variety, and promotional offers.', coupon: 'SBU20', cta: 'Get Discount', url: '#', tag: 'LIMITED' }
+    { name: 'Apex Trader Funding', badge: '80% OFF', desc: 'Discounted evaluation access for futures traders who want lower entry cost and strong funding variety.', coupon: 'SBU20', cta: 'Get Discount', url: '#', tag: 'BEST DEAL', showCoupon: true, image: '' },
+    { name: 'Take Profit Trader', badge: '40% OFF', desc: 'Fast-track funding option with member-focused savings and practical rule structure.', coupon: 'SBU20', cta: 'Get Discount', url: '#', tag: 'POPULAR', showCoupon: true, image: '' },
+    { name: 'Trade Day', badge: '40% OFF', desc: 'Structured evaluation environment built for traders chasing consistency and growth.', coupon: 'SBU20', cta: 'Get Discount', url: '#', tag: 'LIMITED', showCoupon: true, image: '' },
+    { name: 'Funding Ticks', badge: '50% OFF', desc: 'Member savings on evaluation-style access, platform variety, and promotional offers.', coupon: 'SBU20', cta: 'Get Discount', url: '#', tag: 'LIMITED', showCoupon: true, image: '' }
   ]
 };
 
@@ -70,6 +77,33 @@ router.get('/site-settings', async (req, res) => {
     const map = { ...DEFAULT_SITE_SETTINGS };
     for (const row of settings) map[row.key] = row.value;
     return res.json({ success: true, settings: map });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/validate-coupon', async (req, res) => {
+  try {
+    const code = String(req.query.code || '').trim().toUpperCase();
+    const amount = Number(req.query.amount || 0);
+    if (!code) return res.json({ success: true, valid: false, message: 'Coupon code is required', finalAmount: amount });
+
+    const coupon = await Coupon.findOne({ code, isActive: true });
+    if (!coupon) return res.json({ success: true, valid: false, message: 'Coupon is invalid or inactive', finalAmount: amount });
+    if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) return res.json({ success: true, valid: false, message: 'Coupon has expired', finalAmount: amount });
+    if (coupon.maxRedemptions && coupon.redemptions >= coupon.maxRedemptions) return res.json({ success: true, valid: false, message: 'Coupon redemption limit reached', finalAmount: amount });
+
+    let finalAmount = amount;
+    let discountLabel = '';
+    if (coupon.discountType === 'percent') {
+      finalAmount = Math.max(0, amount - (amount * Number(coupon.discountValue) / 100));
+      discountLabel = `${coupon.discountValue}% OFF`;
+    } else {
+      finalAmount = Math.max(0, amount - Number(coupon.discountValue));
+      discountLabel = `$${Number(coupon.discountValue).toFixed(2)} OFF`;
+    }
+
+    return res.json({ success: true, valid: true, finalAmount: Number(finalAmount.toFixed(2)), discountLabel, coupon: { code: coupon.code, discountType: coupon.discountType, discountValue: coupon.discountValue } });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
