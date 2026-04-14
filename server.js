@@ -1,4 +1,5 @@
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./utils/db');
@@ -10,25 +11,56 @@ const authRoutes = require('./routes/auth');
 const checkoutRoutes = require('./routes/checkout');
 const licenseRoutes = require('./routes/license');
 const adminToolsRoutes = require('./routes/adminTools');
+
 const { verifyEmailServer } = require('./services/emailService');
+
 const app = express();
 
-connectDB();
-verifyEmailServer();
-// Stripe webhook route sab ton pehla hona chahida
+// START SERVER PROPER WAY
+async function startServer() {
+  try {
+    await connectDB();
+    await verifyEmailServer();
+
+    console.log('🚀 Server ready');
+  } catch (err) {
+    console.error('❌ Startup error:', err.message);
+  }
+}
+
+startServer();
+
+// IMPORTANT: webhook BEFORE json
 app.use('/api/webhook', webhookRoutes);
 
-
-// after other routes
+// other routes
 app.use('/api/admin-tools', adminToolsRoutes);
-// Normal middleware
-app.use(express.json());
+
+// middleware
 app.use(cors({
   origin: process.env.CLIENT_URL || '*',
   credentials: true
 }));
 
-// Root
+app.use(express.json());
+
+// routes
+app.use('/api/admin', adminRoutes);
+app.use('/api/portal', portalRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/checkout', checkoutRoutes);
+app.use('/api/license', licenseRoutes);
+
+// health check
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'SBU backend running',
+    time: new Date()
+  });
+});
+
+// root
 app.get('/', (req, res) => {
   res.json({
     success: true,
@@ -36,33 +68,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({
-    success: true,
-    env: process.env.NODE_ENV || 'development',
-    mongo: 'connected if no startup error',
-    time: new Date().toISOString()
-  });
-});
-
-// Auth routes
-app.use('/api/auth', authRoutes);
-
-// Checkout route
-app.use('/api', checkoutRoutes);
-
-// Admin routes
-app.use('/api/admin', adminRoutes);
-
-// Portal routes
-app.use('/api/portal', portalRoutes);
-
-// License validate routes
-app.use('/api/license', licenseRoutes);
-
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🌐 Server running on port ${PORT}`);
 });
