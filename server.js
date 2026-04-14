@@ -43,13 +43,13 @@ app.use(
 app.use(express.json());
 
 // Other routes
-app.use('/api/public', publicRoutes);
 app.use('/api/admin-tools', adminToolsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/portal', portalRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/license', licenseRoutes);
+app.use('/api/public', publicRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
