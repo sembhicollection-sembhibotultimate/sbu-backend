@@ -10,10 +10,11 @@ const authRoutes = require('./routes/auth');
 const checkoutRoutes = require('./routes/checkout');
 const licenseRoutes = require('./routes/license');
 const adminToolsRoutes = require('./routes/adminTools');
+const { verifyEmailServer } = require('./services/emailService');
 const app = express();
 
 connectDB();
-
+verifyEmailServer();
 // Stripe webhook route sab ton pehla hona chahida
 app.use('/api/webhook', webhookRoutes);
 
