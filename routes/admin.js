@@ -113,7 +113,12 @@ router.post('/user/:id/resend-email', adminAuth, async (req, res) => {
     await AuditLog.create({ eventType: 'email_resent', email: user.email, status: 'success', details: `License email resent for ${license.licenseKey}` });
     res.json({ success: true, message: 'License email resent successfully' });
   } catch (error) {
-    await AuditLog.create({ eventType: 'email_resend_failed', email: '', status: 'failed', details: error.message }).catch(() => {});
+   await AuditLog.create({
+  eventType: 'email_resend_failed',
+  email: user?.email || '',
+  status: 'failed',
+  details: error.message
+}).catch(() => {});
     res.status(500).json({ success: false, message: error.message });
   }
 });
