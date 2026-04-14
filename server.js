@@ -11,6 +11,7 @@ const authRoutes = require('./routes/auth');
 const checkoutRoutes = require('./routes/checkout');
 const licenseRoutes = require('./routes/license');
 const adminToolsRoutes = require('./routes/adminTools');
+const publicRoutes = require('./routes/public');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use(
 app.use(express.json());
 
 // Other routes
+app.use('/api/public', publicRoutes);
 app.use('/api/admin-tools', adminToolsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/portal', portalRoutes);
