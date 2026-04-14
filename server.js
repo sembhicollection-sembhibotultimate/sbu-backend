@@ -14,26 +14,34 @@ const adminToolsRoutes = require('./routes/adminTools');
 
 const app = express();
 
+// Start server services
 async function startServer() {
   try {
     await connectDB();
     console.log('🚀 Server ready');
-  } catch (err) {
-    console.error('❌ Startup error:', err.message);
+  } catch (error) {
+    console.error('❌ Startup error:', error.message);
   }
 }
 
 startServer();
 
+// IMPORTANT:
+// Stripe webhook route MUST stay before express.json()
 app.use('/api/webhook', webhookRoutes);
 
-app.use(cors({
-  origin: process.env.CLIENT_URL || '*',
-  credentials: true
-}));
+// CORS
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || '*',
+    credentials: true
+  })
+);
 
+// JSON parser
 app.use(express.json());
 
+// Other routes
 app.use('/api/admin-tools', adminToolsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/portal', portalRoutes);
@@ -41,14 +49,17 @@ app.use('/api/auth', authRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/license', licenseRoutes);
 
+// Health check
 app.get('/api/health', (req, res) => {
   res.json({
+    success: true,
     status: 'ok',
     message: 'SBU backend running',
     time: new Date()
   });
 });
 
+// Root
 app.get('/', (req, res) => {
   res.json({
     success: true,
