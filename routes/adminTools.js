@@ -15,7 +15,15 @@ const DEFAULT_TEMPLATES = [
     key: 'license_issue',
     name: 'License Issue',
     subject: 'Your Sembhi Bot Ultimate License',
-    body: 'Hello {name},\n\nYour license key is: {licenseKey}\nPlan: {plan}\n\nThank you.',
+    body: 'Hello {name},
+
+Your payment was successful.
+
+License Key: {licenseKey}
+Plan: {plan}
+Valid Until: {validUntil}
+
+Thank you for choosing Sembhi Bot Ultimate.',
     isActive: true
   },
   {
