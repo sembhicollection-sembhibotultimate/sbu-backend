@@ -10,6 +10,7 @@ const userSchema = new mongoose.Schema(
     address: { type: String, default: '' },
     password: { type: String, default: '' },
     stripeCustomerId: { type: String, default: '' },
+    profilePhoto: { type: String, default: '' },
     isActive: { type: Boolean, default: true }
   },
   { timestamps: true }
