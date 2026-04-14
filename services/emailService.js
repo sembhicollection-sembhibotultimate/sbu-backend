@@ -1,13 +1,21 @@
 const nodemailer = require('nodemailer');
 const EmailTemplate = require('../models/EmailTemplate');
 
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: Number(process.env.SMTP_PORT || 587) === 465,
+  port: SMTP_PORT,
+  secure: SMTP_PORT === 465,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS
+  },
+  connectionTimeout: 20000,
+  greetingTimeout: 20000,
+  socketTimeout: 30000,
+  tls: {
+    rejectUnauthorized: false
   }
 });
 
@@ -16,9 +24,8 @@ function replaceVars(str = '', vars = {}) {
 
   Object.keys(vars).forEach((key) => {
     const value = vars[key] === undefined || vars[key] === null ? '' : String(vars[key]);
-    const regex1 = new RegExp(`\\{${key}\\}`, 'g');
-    const regex2 = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g');
-    output = output.replace(regex1, value).replace(regex2, value);
+    output = output.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+    output = output.replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g'), value);
   });
 
   return output;
@@ -28,9 +35,23 @@ function nl2br(text = '') {
   return String(text).replace(/\n/g, '<br/>');
 }
 
+async function verifyEmailServer() {
+  try {
+    await transporter.verify();
+    console.log('✅ SMTP connected successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ SMTP verify failed:', error.message);
+    return false;
+  }
+}
+
 async function getTemplateByKey(key) {
   if (!key) return null;
-  return EmailTemplate.findOne({ key: String(key).trim(), isActive: true });
+  return EmailTemplate.findOne({
+    key: String(key).trim(),
+    isActive: true
+  });
 }
 
 async function sendTemplateEmail({
@@ -40,9 +61,7 @@ async function sendTemplateEmail({
   fallbackSubject = '',
   fallbackBody = ''
 }) {
-  if (!to) {
-    throw new Error('Recipient email is required');
-  }
+  if (!to) throw new Error('Recipient email is required');
 
   const template = await getTemplateByKey(templateKey);
 
@@ -94,11 +113,12 @@ async function sendLicenseEmail({
     },
     fallbackSubject: 'Your Sembhi Bot Ultimate License',
     fallbackBody:
-      'Hello {name},\n\nYour license key is: {licenseKey}\nPlan: {plan}\nValid Until: {validUntil}\n\nThank you.'
+      'Hello {name},\n\nYour payment was successful.\n\nLicense Key: {licenseKey}\nPlan: {plan}\nValid Until: {validUntil}\n\nThank you for choosing Sembhi Bot Ultimate.'
   });
 }
 
 module.exports = {
-  sendLicenseEmail,
-  sendTemplateEmail
+  verifyEmailServer,
+  sendTemplateEmail,
+  sendLicenseEmail
 };
