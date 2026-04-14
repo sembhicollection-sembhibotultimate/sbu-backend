@@ -3,7 +3,6 @@ const Stripe = require('stripe');
 const User = require('../models/User');
 const License = require('../models/License');
 const Payment = require('../models/Payment');
-const Coupon = require('../models/Coupon');
 const AuditLog = require('../models/AuditLog');
 const WebhookEvent = require('../models/WebhookEvent');
 
@@ -59,18 +58,6 @@ async function markProcessed(stripeEventId, eventType, note = '') {
     status: 'processed',
     note
   });
-}
-
-
-async function incrementCouponRedemptionFromInvoice(invoice) {
-  const couponCode = invoice?.parent?.subscription_details?.metadata?.couponCode || invoice?.lines?.data?.[0]?.metadata?.couponCode || '';
-  if (!couponCode) return;
-
-  const coupon = await Coupon.findOne({ code: String(couponCode).trim().toUpperCase() });
-  if (coupon) {
-    coupon.timesRedeemed = Number(coupon.timesRedeemed || 0) + 1;
-    await coupon.save();
-  }
 }
 
 async function markFailed(stripeEventId, eventType, note = '') {
@@ -231,8 +218,6 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
           orderId,
           rawSnapshot: invoice
         });
-
-        await incrementCouponRedemptionFromInvoice(invoice).catch(() => {});
 
         if (!license) {
           license = await createLicenseForUser({
