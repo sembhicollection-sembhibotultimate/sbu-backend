@@ -20,7 +20,7 @@ const app = express();
 async function startServer() {
   try {
     await connectDB();
-    await verifyEmailServer();
+
 
     console.log('🚀 Server ready');
   } catch (err) {
