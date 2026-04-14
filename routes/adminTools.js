@@ -15,56 +15,133 @@ const DEFAULT_TEMPLATES = [
   {
     key: 'license_issue',
     name: 'License Issue',
-    subject: 'Your Sembhi Bot Ultimate License',
+    subject: 'Your Sembhi Bot Ultimate License Is Ready',
     body: `Hello {name},
 
-Your payment was successful.
+Thank you for your purchase of Sembhi Bot Ultimate.
+
+Your payment has been received successfully, and your license is now ready to use.
 
 License Key: {licenseKey}
 Plan: {plan}
 Valid Until: {validUntil}
 
-Thank you for choosing Sembhi Bot Ultimate.`,
+Important:
+- Please keep your license key secure.
+- Use the same details during activation inside your bot.
+- If you face any activation issue, contact support.
+
+Thank you for choosing Sembhi Bot Ultimate.
+
+Regards,
+Sembhi Bot Ultimate Support`,
     isActive: true
   },
   {
     key: 'renewal',
     name: 'Renewal Reminder',
-    subject: 'Renewal Reminder',
+    subject: 'Your Sembhi Bot Ultimate Plan Is Due For Renewal',
     body: `Hello {name},
 
-Your plan {plan} is due for renewal soon.
+This is a friendly reminder that your Sembhi Bot Ultimate plan is due for renewal soon.
+
+Plan: {plan}
+Current Valid Until: {validUntil}
+
+To avoid interruption in access, please renew your subscription before the expiry date.
+
+If you need any help, our support team is here for you.
 
 Regards,
-SBU Support`,
+Sembhi Bot Ultimate Support`,
+    isActive: true
+  },
+  {
+    key: 'payment_failed',
+    name: 'Payment Failed',
+    subject: 'Payment Failed For Your Sembhi Bot Ultimate Subscription',
+    body: `Hello {name},
+
+We were unable to process your latest subscription payment for Sembhi Bot Ultimate.
+
+Plan: {plan}
+
+Please update your payment method or complete the payment as soon as possible to avoid service interruption.
+
+If you believe this was a mistake, please contact support.
+
+Regards,
+Sembhi Bot Ultimate Support`,
+    isActive: true
+  },
+  {
+    key: 'license_renewed',
+    name: 'License Renewed',
+    subject: 'Your Sembhi Bot Ultimate License Has Been Renewed',
+    body: `Hello {name},
+
+Your Sembhi Bot Ultimate subscription has been renewed successfully.
+
+Plan: {plan}
+Updated Valid Until: {validUntil}
+
+Your license remains active, and no further action is required at this time.
+
+Thank you for staying with Sembhi Bot Ultimate.
+
+Regards,
+Sembhi Bot Ultimate Support`,
     isActive: true
   },
   {
     key: 'disabled_account',
     name: 'Disabled Account',
-    subject: 'Account Disabled Notice',
+    subject: 'Important Notice About Your Sembhi Bot Ultimate Account',
     body: `Hello {name},
 
-Your account is currently disabled. Please contact support for help.
+Your Sembhi Bot Ultimate account is currently inactive or disabled.
+
+If you think this happened by mistake, please contact support so we can review your account and help you restore access.
 
 Regards,
-SBU Support`,
+Sembhi Bot Ultimate Support`,
     isActive: true
   },
   {
     key: 'manual_support',
     name: 'Manual Support',
-    subject: 'Support Update',
+    subject: 'Update From Sembhi Bot Ultimate Support',
     body: `Hello {name},
 
-We are updating you regarding your support request.
+We are contacting you regarding your recent request.
+
+Our support team is reviewing your issue and will guide you with the next steps as needed.
+
+Thank you for your patience and support.
 
 Regards,
-SBU Support`,
+Sembhi Bot Ultimate Support`,
+    isActive: true
+  },
+  {
+    key: 'welcome_signup',
+    name: 'Welcome Signup',
+    subject: 'Welcome To Sembhi Bot Ultimate',
+    body: `Hello {name},
+
+Welcome to Sembhi Bot Ultimate.
+
+Your account has been created successfully. We are excited to have you with us.
+
+You can now continue with your subscription, license activation, and platform access.
+
+If you need help at any stage, please contact support.
+
+Regards,
+Sembhi Bot Ultimate Support`,
     isActive: true
   }
 ];
-
 router.post('/templates/seed', adminAuth, async (req, res) => {
   try {
     for (const item of DEFAULT_TEMPLATES) {
