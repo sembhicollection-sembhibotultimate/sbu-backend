@@ -12,16 +12,11 @@ const checkoutRoutes = require('./routes/checkout');
 const licenseRoutes = require('./routes/license');
 const adminToolsRoutes = require('./routes/adminTools');
 
-
-
 const app = express();
 
-// START SERVER PROPER WAY
 async function startServer() {
   try {
     await connectDB();
-
-
     console.log('🚀 Server ready');
   } catch (err) {
     console.error('❌ Startup error:', err.message);
@@ -30,13 +25,8 @@ async function startServer() {
 
 startServer();
 
-// IMPORTANT: webhook BEFORE json
 app.use('/api/webhook', webhookRoutes);
 
-// other routes
-app.use('/api/admin-tools', adminToolsRoutes);
-
-// middleware
 app.use(cors({
   origin: process.env.CLIENT_URL || '*',
   credentials: true
@@ -44,14 +34,13 @@ app.use(cors({
 
 app.use(express.json());
 
-// routes
+app.use('/api/admin-tools', adminToolsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/portal', portalRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/license', licenseRoutes);
 
-// health check
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -60,7 +49,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// root
 app.get('/', (req, res) => {
   res.json({
     success: true,
