@@ -7,8 +7,14 @@ const SMTP_USER = String(process.env.SMTP_USER || '').trim();
 const SMTP_PASS = String(process.env.SMTP_PASS || '').trim();
 const FROM_EMAIL = String(process.env.FROM_EMAIL || SMTP_USER || '').trim();
 const FROM_NAME = String(process.env.FROM_NAME || 'Sembhi Bot Ultimate').trim();
+const SUPPORT_EMAIL = String(
+  process.env.SUPPORT_EMAIL || 'support@sembhibotultimate.com'
+).trim();
 
-const SMTP_SECURE_ENV = String(process.env.SMTP_SECURE || '').trim().toLowerCase();
+const SMTP_SECURE_ENV = String(process.env.SMTP_SECURE || '')
+  .trim()
+  .toLowerCase();
+
 const SMTP_SECURE =
   SMTP_SECURE_ENV === 'true'
     ? true
@@ -41,7 +47,10 @@ function replaceVars(str = '', vars = {}) {
       vars[key] === undefined || vars[key] === null ? '' : String(vars[key]);
 
     output = output.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
-    output = output.replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g'), value);
+    output = output.replace(
+      new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g'),
+      value
+    );
   });
 
   return output;
@@ -51,18 +60,39 @@ function nl2br(text = '') {
   return String(text).replace(/\n/g, '<br/>');
 }
 
-function getEmailShell({ title = 'Sembhi Bot Ultimate', bodyHtml = '' }) {
+function escapeHtml(str = '') {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function buildButtonHtml(label, url) {
+  if (!url) return '';
+  return `
+    <div style="margin:24px 0 10px 0;">
+      <a href="${url}"
+         style="display:inline-block;background:#f1c75b;color:#111111;text-decoration:none;
+                padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;
+                font-family:Arial,sans-serif;">
+        ${escapeHtml(label)}
+      </a>
+    </div>
+  `;
+}
+
+function getEmailShell({ title = 'Sembhi Bot Ultimate', subtitle = '', bodyHtml = '' }) {
   return `
   <div style="margin:0;padding:0;background:#060606;">
     <div style="max-width:700px;margin:0 auto;padding:30px 16px;">
       <div style="background:#0d0d0d;border:1px solid #242424;border-radius:18px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.35);">
-        
+
         <div style="padding:24px 24px 18px 24px;background:linear-gradient(135deg,#0d0d0d 0%,#171717 100%);border-bottom:1px solid #222;">
           <div style="font-family:Arial,sans-serif;font-size:28px;font-weight:800;color:#f3c75f;letter-spacing:0.4px;">
-            ${title}
+            ${escapeHtml(title)}
           </div>
           <div style="font-family:Arial,sans-serif;font-size:12px;color:#9e9e9e;margin-top:6px;">
-            Professional Trading Automation Platform
+            ${escapeHtml(subtitle || 'Professional Trading Automation Platform')}
           </div>
         </div>
 
@@ -74,6 +104,9 @@ function getEmailShell({ title = 'Sembhi Bot Ultimate', bodyHtml = '' }) {
           <div style="font-family:Arial,sans-serif;font-size:12px;color:#9a9a9a;">
             This is an automated email from Sembhi Bot Ultimate.
           </div>
+          <div style="font-family:Arial,sans-serif;font-size:12px;color:#9a9a9a;margin-top:6px;">
+            Support: ${escapeHtml(SUPPORT_EMAIL)}
+          </div>
         </div>
       </div>
     </div>
@@ -81,10 +114,23 @@ function getEmailShell({ title = 'Sembhi Bot Ultimate', bodyHtml = '' }) {
   `;
 }
 
-function buildDefaultTemplateBody(text = '') {
+function buildDefaultTemplateBody(text = '', options = {}) {
+  const {
+    buttonLabel = '',
+    buttonUrl = '',
+    title = 'Sembhi Bot Ultimate',
+    subtitle = 'Professional Trading Automation Platform'
+  } = options;
+
+  const bodyHtml = `
+    <div>${nl2br(escapeHtml(text))}</div>
+    ${buildButtonHtml(buttonLabel, buttonUrl)}
+  `;
+
   return getEmailShell({
-    title: 'Sembhi Bot Ultimate',
-    bodyHtml: `<div>${nl2br(text)}</div>`
+    title,
+    subtitle,
+    bodyHtml
   });
 }
 
@@ -97,6 +143,7 @@ async function verifyEmailServer() {
     console.log(`SMTP_USER=${SMTP_USER ? 'SET' : 'MISSING'}`);
     console.log(`SMTP_PASS=${SMTP_PASS ? 'SET' : 'MISSING'}`);
     console.log(`FROM_EMAIL=${FROM_EMAIL || '(empty)'}`);
+    console.log(`SUPPORT_EMAIL=${SUPPORT_EMAIL || '(empty)'}`);
 
     if (!SMTP_HOST) throw new Error('SMTP_HOST missing');
     if (!SMTP_PORT) throw new Error('SMTP_PORT missing');
@@ -128,7 +175,11 @@ async function sendTemplateEmail({
   variables = {},
   fallbackSubject = '',
   fallbackBody = '',
-  customHtml = ''
+  customHtml = '',
+  buttonLabel = '',
+  buttonUrl = '',
+  title = 'Sembhi Bot Ultimate',
+  subtitle = 'Professional Trading Automation Platform'
 }) {
   if (!to) {
     throw new Error('Recipient email is required');
@@ -146,7 +197,12 @@ async function sendTemplateEmail({
 
   const html = customHtml
     ? customHtml
-    : buildDefaultTemplateBody(body);
+    : buildDefaultTemplateBody(body, {
+        buttonLabel,
+        buttonUrl,
+        title,
+        subtitle
+      });
 
   const info = await transporter.sendMail({
     from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
@@ -164,7 +220,8 @@ async function sendLicenseEmail({
   name,
   licenseKey,
   validUntil,
-  plan = 'Monthly'
+  plan = 'Monthly',
+  portalUrl = ''
 }) {
   return sendTemplateEmail({
     to,
@@ -175,11 +232,14 @@ async function sendLicenseEmail({
       validUntil: validUntil
         ? new Date(validUntil).toLocaleDateString('en-AU')
         : '',
-      plan: plan || 'Monthly'
+      plan: plan || 'Monthly',
+      supportEmail: SUPPORT_EMAIL
     },
     fallbackSubject: 'Your Sembhi Bot Ultimate License Is Ready',
     fallbackBody:
-      'Hello {name},\n\nThank you for your purchase of Sembhi Bot Ultimate.\n\nYour payment has been received successfully, and your license is now ready to use.\n\nLicense Key: {licenseKey}\nPlan: {plan}\nValid Until: {validUntil}\n\nPlease keep your license key secure.\n\nRegards,\nSembhi Bot Ultimate Support'
+      'Hello {name},\n\nThank you for your purchase of Sembhi Bot Ultimate.\n\nYour payment has been received successfully, and your license is now ready to use.\n\nLicense Key: {licenseKey}\nPlan: {plan}\nValid Until: {validUntil}\n\nPlease keep your license key secure.\n\nIf you need help, contact: {supportEmail}\n\nRegards,\nSembhi Bot Ultimate Support',
+    buttonLabel: portalUrl ? 'Open Customer Portal' : '',
+    buttonUrl: portalUrl || ''
   });
 }
 
@@ -187,7 +247,8 @@ async function sendRenewalReminderEmail({
   to,
   name,
   plan = 'Monthly',
-  validUntil
+  validUntil,
+  billingUrl = ''
 }) {
   return sendTemplateEmail({
     to,
@@ -197,29 +258,36 @@ async function sendRenewalReminderEmail({
       plan: plan || 'Monthly',
       validUntil: validUntil
         ? new Date(validUntil).toLocaleDateString('en-AU')
-        : ''
+        : '',
+      supportEmail: SUPPORT_EMAIL
     },
     fallbackSubject: 'Your Sembhi Bot Ultimate Plan Is Due For Renewal',
     fallbackBody:
-      'Hello {name},\n\nThis is a friendly reminder that your Sembhi Bot Ultimate plan is due for renewal soon.\n\nPlan: {plan}\nCurrent Valid Until: {validUntil}\n\nPlease renew before expiry to avoid interruption.\n\nRegards,\nSembhi Bot Ultimate Support'
+      'Hello {name},\n\nThis is a friendly reminder that your Sembhi Bot Ultimate plan is due for renewal soon.\n\nPlan: {plan}\nCurrent Valid Until: {validUntil}\n\nPlease renew before expiry to avoid interruption.\n\nNeed help? Contact: {supportEmail}\n\nRegards,\nSembhi Bot Ultimate Support',
+    buttonLabel: billingUrl ? 'Manage Billing' : '',
+    buttonUrl: billingUrl || ''
   });
 }
 
 async function sendPaymentFailedEmail({
   to,
   name,
-  plan = 'Monthly'
+  plan = 'Monthly',
+  billingUrl = ''
 }) {
   return sendTemplateEmail({
     to,
     templateKey: 'payment_failed',
     variables: {
       name: name || 'User',
-      plan: plan || 'Monthly'
+      plan: plan || 'Monthly',
+      supportEmail: SUPPORT_EMAIL
     },
     fallbackSubject: 'Payment Failed For Your Sembhi Bot Ultimate Subscription',
     fallbackBody:
-      'Hello {name},\n\nWe were unable to process your latest subscription payment for Sembhi Bot Ultimate.\n\nPlan: {plan}\n\nPlease update your payment method to avoid service interruption.\n\nRegards,\nSembhi Bot Ultimate Support'
+      'Hello {name},\n\nWe were unable to process your latest subscription payment for Sembhi Bot Ultimate.\n\nPlan: {plan}\n\nPlease update your payment method to avoid service interruption.\n\nNeed help? Contact: {supportEmail}\n\nRegards,\nSembhi Bot Ultimate Support',
+    buttonLabel: billingUrl ? 'Update Payment Method' : '',
+    buttonUrl: billingUrl || ''
   });
 }
 
@@ -227,7 +295,8 @@ async function sendLicenseRenewedEmail({
   to,
   name,
   plan = 'Monthly',
-  validUntil
+  validUntil,
+  portalUrl = ''
 }) {
   return sendTemplateEmail({
     to,
@@ -237,27 +306,34 @@ async function sendLicenseRenewedEmail({
       plan: plan || 'Monthly',
       validUntil: validUntil
         ? new Date(validUntil).toLocaleDateString('en-AU')
-        : ''
+        : '',
+      supportEmail: SUPPORT_EMAIL
     },
     fallbackSubject: 'Your Sembhi Bot Ultimate License Has Been Renewed',
     fallbackBody:
-      'Hello {name},\n\nYour Sembhi Bot Ultimate subscription has been renewed successfully.\n\nPlan: {plan}\nUpdated Valid Until: {validUntil}\n\nThank you for staying with us.\n\nRegards,\nSembhi Bot Ultimate Support'
+      'Hello {name},\n\nYour Sembhi Bot Ultimate subscription has been renewed successfully.\n\nPlan: {plan}\nUpdated Valid Until: {validUntil}\n\nIf you need help, contact: {supportEmail}\n\nRegards,\nSembhi Bot Ultimate Support',
+    buttonLabel: portalUrl ? 'Open Customer Portal' : '',
+    buttonUrl: portalUrl || ''
   });
 }
 
 async function sendWelcomeSignupEmail({
   to,
-  name
+  name,
+  portalUrl = ''
 }) {
   return sendTemplateEmail({
     to,
     templateKey: 'welcome_signup',
     variables: {
-      name: name || 'User'
+      name: name || 'User',
+      supportEmail: SUPPORT_EMAIL
     },
     fallbackSubject: 'Welcome To Sembhi Bot Ultimate',
     fallbackBody:
-      'Hello {name},\n\nWelcome to Sembhi Bot Ultimate.\n\nYour account has been created successfully.\n\nRegards,\nSembhi Bot Ultimate Support'
+      'Hello {name},\n\nWelcome to Sembhi Bot Ultimate.\n\nYour account has been created successfully.\n\nIf you need any help, contact: {supportEmail}\n\nRegards,\nSembhi Bot Ultimate Support',
+    buttonLabel: portalUrl ? 'Open Customer Portal' : '',
+    buttonUrl: portalUrl || ''
   });
 }
 
