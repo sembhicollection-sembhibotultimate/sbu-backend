@@ -4,6 +4,9 @@ const User = require('../models/User');
 const License = require('../models/License');
 const Payment = require('../models/Payment');
 const AuditLog = require('../models/AuditLog');
+const Coupon = require('../models/Coupon');
+const Stripe = require('stripe');
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 const {
   sendLicenseEmail,
   sendTemplateEmail
@@ -453,6 +456,88 @@ router.get('/logs', adminAuth, async (req, res) => {
   try {
     const logs = await AuditLog.find().sort({ createdAt: -1 });
     res.json({ success: true, logs });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+
+router.get('/coupons', adminAuth, async (req, res) => {
+  try {
+    const coupons = await Coupon.find().sort({ createdAt: -1 });
+    res.json({ success: true, coupons });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/coupons', adminAuth, async (req, res) => {
+  try {
+    const { code, name, discountType = 'percent', discountValue = 0, maxRedemptions = null, expiresAt = null } = req.body || {};
+    if (!code || !discountValue) {
+      return res.status(400).json({ success: false, message: 'code and discountValue are required' });
+    }
+    const couponCode = String(code).trim().toUpperCase();
+    const exists = await Coupon.findOne({ code: couponCode });
+    if (exists) {
+      return res.status(400).json({ success: false, message: 'Coupon already exists' });
+    }
+    let stripeCouponId = '';
+    try {
+      if (process.env.STRIPE_SECRET_KEY) {
+        const stripeCoupon = await stripe.coupons.create(
+          discountType === 'percent'
+            ? { percent_off: Number(discountValue), duration: 'once', name: name || couponCode, max_redemptions: maxRedemptions || undefined, redeem_by: expiresAt ? Math.floor(new Date(expiresAt).getTime() / 1000) : undefined }
+            : { amount_off: Math.round(Number(discountValue) * 100), currency: 'usd', duration: 'once', name: name || couponCode, max_redemptions: maxRedemptions || undefined, redeem_by: expiresAt ? Math.floor(new Date(expiresAt).getTime() / 1000) : undefined }
+        );
+        stripeCouponId = stripeCoupon.id;
+      }
+    } catch (stripeError) {
+      console.error('Stripe coupon create failed:', stripeError.message);
+    }
+
+    const coupon = await Coupon.create({
+      code: couponCode,
+      name: name || couponCode,
+      discountType,
+      discountValue: Number(discountValue),
+      maxRedemptions: maxRedemptions || null,
+      expiresAt: expiresAt || null,
+      stripeCouponId,
+      isActive: true
+    });
+
+    await AuditLog.create({ eventType: 'coupon_created', email: '', status: 'success', details: `Coupon created: ${coupon.code}` });
+    res.json({ success: true, coupon });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.patch('/coupons/:id', adminAuth, async (req, res) => {
+  try {
+    const coupon = await Coupon.findById(req.params.id);
+    if (!coupon) return res.status(404).json({ success: false, message: 'Coupon not found' });
+    const { isActive, name, maxRedemptions, expiresAt } = req.body || {};
+    if (typeof isActive === 'boolean') coupon.isActive = isActive;
+    if (typeof name === 'string') coupon.name = name.trim();
+    if (maxRedemptions !== undefined) coupon.maxRedemptions = maxRedemptions || null;
+    if (expiresAt !== undefined) coupon.expiresAt = expiresAt || null;
+    await coupon.save();
+    await AuditLog.create({ eventType: 'coupon_updated', email: '', status: 'success', details: `Coupon updated: ${coupon.code}` });
+    res.json({ success: true, coupon });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.delete('/coupons/:id', adminAuth, async (req, res) => {
+  try {
+    const coupon = await Coupon.findById(req.params.id);
+    if (!coupon) return res.status(404).json({ success: false, message: 'Coupon not found' });
+    await Coupon.findByIdAndDelete(req.params.id);
+    await AuditLog.create({ eventType: 'coupon_deleted', email: '', status: 'success', details: `Coupon deleted: ${coupon.code}` });
+    res.json({ success: true, message: 'Coupon deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
