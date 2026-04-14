@@ -2,12 +2,18 @@ const mongoose = require('mongoose');
 
 const licenseSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    email: { type: String, required: true, index: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    email: { type: String, required: true, index: true, lowercase: true, trim: true },
     licenseKey: { type: String, required: true, unique: true, index: true },
+
     productName: { type: String, default: 'Sembhi Bot Ultimate' },
     plan: { type: String, default: 'Monthly' },
-    status: { type: String, enum: ['active', 'inactive', 'expired'], default: 'active' },
+
+    status: {
+      type: String,
+      enum: ['active', 'inactive', 'expired'],
+      default: 'active'
+    },
 
     activatedDevices: { type: Number, default: 0 },
     maxDevices: { type: Number, default: 1 },
@@ -18,6 +24,8 @@ const licenseSchema = new mongoose.Schema(
 
     orderId: { type: String, default: '' },
     stripeSessionId: { type: String, default: '' },
+    stripeCustomerId: { type: String, default: '', index: true },
+    stripeSubscriptionId: { type: String, default: '', index: true },
 
     validFrom: { type: Date, default: Date.now },
     validUntil: { type: Date, required: true }
@@ -25,4 +33,4 @@ const licenseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model('License', licenseSchema);
+module.exports = mongoose.models.License || mongoose.model('License', licenseSchema);
