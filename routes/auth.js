@@ -68,6 +68,7 @@ router.post('/signup', async (req, res) => {
         email: user.email,
         mobile: user.mobile,
         address: user.address,
+        profilePhoto: user.profilePhoto || '',
         isActive: user.isActive,
         plan: '$149/month'
       }
@@ -157,6 +158,7 @@ router.post('/login', async (req, res) => {
         email: user.email,
         mobile: user.mobile,
         address: user.address,
+        profilePhoto: user.profilePhoto || '',
         isActive: user.isActive,
         plan: '$149/month'
       }
