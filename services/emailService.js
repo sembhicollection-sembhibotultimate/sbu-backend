@@ -5,32 +5,25 @@ const SMTP_HOST = String(process.env.SMTP_HOST || '').trim();
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
 const SMTP_USER = String(process.env.SMTP_USER || '').trim();
 const SMTP_PASS = String(process.env.SMTP_PASS || '').trim();
+
 const FROM_EMAIL = String(process.env.FROM_EMAIL || SMTP_USER || '').trim();
 const FROM_NAME = String(process.env.FROM_NAME || 'Sembhi Bot Ultimate').trim();
 const SUPPORT_EMAIL = String(
   process.env.SUPPORT_EMAIL || 'support@sembhibotultimate.com'
 ).trim();
 
-const SMTP_SECURE_ENV = String(process.env.SMTP_SECURE || '')
-  .trim()
-  .toLowerCase();
-
-const SMTP_SECURE =
-  SMTP_SECURE_ENV === 'true'
-    ? true
-    : SMTP_SECURE_ENV === 'false'
-      ? false
-      : SMTP_PORT === 465;
-
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: false, // IMPORTANT
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: false,
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
+    user: SMTP_USER,
+    pass: SMTP_PASS
   },
   requireTLS: true,
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 20000,
   tls: {
     rejectUnauthorized: false
   }
@@ -65,11 +58,12 @@ function escapeHtml(str = '') {
 }
 
 function buildButtonHtml(label, url) {
-  if (!url) return '';
+  if (!label || !url) return '';
+
   return `
-    <div style="margin:24px 0 10px 0;">
+    <div style="margin:24px 0 8px 0;">
       <a href="${url}"
-         style="display:inline-block;background:#f1c75b;color:#111111;text-decoration:none;
+         style="display:inline-block;background:#f3c75f;color:#111111;text-decoration:none;
                 padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;
                 font-family:Arial,sans-serif;">
         ${escapeHtml(label)}
@@ -78,18 +72,18 @@ function buildButtonHtml(label, url) {
   `;
 }
 
-function getEmailShell({ title = 'Sembhi Bot Ultimate', subtitle = '', bodyHtml = '' }) {
+function getEmailShell({ title = 'Sembhi Bot Ultimate', bodyHtml = '' }) {
   return `
   <div style="margin:0;padding:0;background:#060606;">
     <div style="max-width:700px;margin:0 auto;padding:30px 16px;">
       <div style="background:#0d0d0d;border:1px solid #242424;border-radius:18px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.35);">
 
-        <div style="padding:24px 24px 18px 24px;background:linear-gradient(135deg,#0d0d0d 0%,#171717 100%);border-bottom:1px solid #222;">
+        <div style="padding:24px;background:linear-gradient(135deg,#0d0d0d 0%,#171717 100%);border-bottom:1px solid #222;">
           <div style="font-family:Arial,sans-serif;font-size:28px;font-weight:800;color:#f3c75f;letter-spacing:0.4px;">
             ${escapeHtml(title)}
           </div>
           <div style="font-family:Arial,sans-serif;font-size:12px;color:#9e9e9e;margin-top:6px;">
-            ${escapeHtml(subtitle || 'Professional Trading Automation Platform')}
+            Professional Trading Automation Platform
           </div>
         </div>
 
@@ -115,8 +109,7 @@ function buildDefaultTemplateBody(text = '', options = {}) {
   const {
     buttonLabel = '',
     buttonUrl = '',
-    title = 'Sembhi Bot Ultimate',
-    subtitle = 'Professional Trading Automation Platform'
+    title = 'Sembhi Bot Ultimate'
   } = options;
 
   const bodyHtml = `
@@ -126,35 +119,8 @@ function buildDefaultTemplateBody(text = '', options = {}) {
 
   return getEmailShell({
     title,
-    subtitle,
     bodyHtml
   });
-}
-
-async function verifyEmailServer() {
-  try {
-    console.log('📨 SMTP check starting...');
-    console.log(`SMTP_HOST=${SMTP_HOST || '(empty)'}`);
-    console.log(`SMTP_PORT=${SMTP_PORT}`);
-    console.log(`SMTP_SECURE=${SMTP_SECURE}`);
-    console.log(`SMTP_USER=${SMTP_USER ? 'SET' : 'MISSING'}`);
-    console.log(`SMTP_PASS=${SMTP_PASS ? 'SET' : 'MISSING'}`);
-    console.log(`FROM_EMAIL=${FROM_EMAIL || '(empty)'}`);
-    console.log(`SUPPORT_EMAIL=${SUPPORT_EMAIL || '(empty)'}`);
-
-    if (!SMTP_HOST) throw new Error('SMTP_HOST missing');
-    if (!SMTP_PORT) throw new Error('SMTP_PORT missing');
-    if (!SMTP_USER) throw new Error('SMTP_USER missing');
-    if (!SMTP_PASS) throw new Error('SMTP_PASS missing');
-    if (!FROM_EMAIL) throw new Error('FROM_EMAIL missing');
-
-    await transporter.verify();
-    console.log('✅ SMTP connected successfully');
-    return true;
-  } catch (error) {
-    console.error('❌ SMTP verify failed:', error.message);
-    return false;
-  }
 }
 
 async function getTemplateByKey(key) {
@@ -175,11 +141,14 @@ async function sendTemplateEmail({
   customHtml = '',
   buttonLabel = '',
   buttonUrl = '',
-  title = 'Sembhi Bot Ultimate',
-  subtitle = 'Professional Trading Automation Platform'
+  title = 'Sembhi Bot Ultimate'
 }) {
   if (!to) {
     throw new Error('Recipient email is required');
+  }
+
+  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS || !FROM_EMAIL) {
+    throw new Error('Email configuration is incomplete');
   }
 
   const template = await getTemplateByKey(templateKey);
@@ -197,8 +166,7 @@ async function sendTemplateEmail({
     : buildDefaultTemplateBody(body, {
         buttonLabel,
         buttonUrl,
-        title,
-        subtitle
+        title
       });
 
   const info = await transporter.sendMail({
@@ -335,7 +303,6 @@ async function sendWelcomeSignupEmail({
 }
 
 module.exports = {
-  verifyEmailServer,
   sendTemplateEmail,
   sendLicenseEmail,
   sendRenewalReminderEmail,
