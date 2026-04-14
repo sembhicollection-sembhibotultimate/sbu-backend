@@ -9,6 +9,8 @@ const AuditLog = require('../models/AuditLog');
 
 const router = express.Router();
 
+
+// ---------- EMAIL TEMPLATES ----------
 const DEFAULT_TEMPLATES = [
   {
     key: 'license_issue',
@@ -92,6 +94,36 @@ Sembhi Bot Ultimate Support`,
     isActive: true
   },
   {
+    key: 'disabled_account',
+    name: 'Disabled Account',
+    subject: 'Important Notice About Your Sembhi Bot Ultimate Account',
+    body: `Hello {name},
+
+Your Sembhi Bot Ultimate account is currently inactive or disabled.
+
+If you think this happened by mistake, please contact support so we can review your account and help you restore access.
+
+Regards,
+Sembhi Bot Ultimate Support`,
+    isActive: true
+  },
+  {
+    key: 'manual_support',
+    name: 'Manual Support',
+    subject: 'Update From Sembhi Bot Ultimate Support',
+    body: `Hello {name},
+
+We are contacting you regarding your recent request.
+
+Our support team is reviewing your issue and will guide you with the next steps as needed.
+
+Thank you for your patience and support.
+
+Regards,
+Sembhi Bot Ultimate Support`,
+    isActive: true
+  },
+  {
     key: 'welcome_signup',
     name: 'Welcome Signup',
     subject: 'Welcome To Sembhi Bot Ultimate',
@@ -110,62 +142,23 @@ Sembhi Bot Ultimate Support`,
     isActive: true
   }
 ];
-
-const DEFAULT_SETTINGS = [
-  { key: 'business_name', value: 'Sembhi Bot Ultimate', category: 'branding' },
-  { key: 'site_logo_data', value: '', category: 'branding' },
-  { key: 'site_logo_text', value: 'SB', category: 'branding' },
-  { key: 'site_tagline', value: 'Professional Trading Automation Platform', category: 'branding' },
-  { key: 'theme_primary', value: '#0b1020', category: 'branding' },
-  { key: 'theme_accent', value: '#f3c75f', category: 'branding' },
-  { key: 'theme_footer_bg', value: '#070b17', category: 'branding' },
-  { key: 'theme_footer_card', value: '#10182a', category: 'branding' },
-  { key: 'hero_title', value: 'Sembhi Bot Ultimate — Smarter Trading Starts Here', category: 'website' },
-  { key: 'hero_subtitle', value: 'A premium bot, portal, and subscription experience built for serious traders.', category: 'website' },
-  { key: 'support_email', value: 'support@sembhibotultimate.com', category: 'contact' },
-  { key: 'contact_email', value: 'support@sembhibotultimate.com', category: 'contact' },
-  { key: 'support_phone', value: '0432 563 568', category: 'contact' },
-  { key: 'business_location', value: 'Melbourne, Australia', category: 'contact' },
-  { key: 'social_facebook', value: '', category: 'social' },
-  { key: 'social_instagram', value: '', category: 'social' },
-  { key: 'social_whatsapp', value: '', category: 'social' },
-  { key: 'social_tiktok', value: '', category: 'social' },
-  { key: 'social_youtube', value: '', category: 'social' },
-  { key: 'social_telegram', value: '', category: 'social' },
-  { key: 'offer_bar_enabled', value: true, category: 'offers' },
-  { key: 'offer_bar_text', value: 'NEW PRODUCTS EVALS UP TO 90% OFF - 90% OFF | USE CODE "SAVENOW"', category: 'offers' },
-  { key: 'offer_coupon_code', value: 'SAVENOW', category: 'offers' },
-  { key: 'offer_button_label', value: 'COUPON "SAVENOW"', category: 'offers' },
-  { key: 'offer_button_link', value: '#subscriptions', category: 'offers' },
-  { key: 'offer_ends_at', value: '', category: 'offers' },
-  { key: 'admin_entry_enabled', value: true, category: 'admin' },
-  { key: 'admin_entry_label', value: 'Admin Panel', category: 'admin' },
-  { key: 'admin_login_username', value: 'admin', category: 'admin' },
-  { key: 'admin_login_password', value: 'admin123', category: 'admin' },
-  { key: 'default_currency', value: 'AUD', category: 'billing' }
-];
-
-function toMap(settings = []) {
-  return settings.reduce((acc, item) => {
-    acc[item.key] = item.value;
-    return acc;
-  }, {});
-}
-
-async function seedDefaults(items, Model, keyField='key') {
-  for (const item of items) {
-    await Model.findOneAndUpdate(
-      { [keyField]: item[keyField] },
-      { $setOnInsert: item },
-      { upsert: true, new: true }
-    );
-  }
-}
-
 router.post('/templates/seed', adminAuth, async (req, res) => {
   try {
-    await seedDefaults(DEFAULT_TEMPLATES, EmailTemplate);
-    await AuditLog.create({ eventType: 'templates_seeded', email: '', status: 'success', details: 'Default email templates seeded' });
+    for (const item of DEFAULT_TEMPLATES) {
+      await EmailTemplate.findOneAndUpdate(
+        { key: item.key },
+        { $setOnInsert: item },
+        { upsert: true, new: true }
+      );
+    }
+
+    await AuditLog.create({
+      eventType: 'templates_seeded',
+      email: '',
+      status: 'success',
+      details: 'Default email templates seeded'
+    });
+
     return res.json({ success: true, message: 'Default templates seeded successfully' });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -184,7 +177,9 @@ router.get('/templates', adminAuth, async (req, res) => {
 router.get('/template/:key', adminAuth, async (req, res) => {
   try {
     const template = await EmailTemplate.findOne({ key: req.params.key.trim() });
-    if (!template) return res.status(404).json({ success: false, message: 'Template not found' });
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Template not found' });
+    }
     return res.json({ success: true, template });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -199,10 +194,25 @@ router.post('/template', adminAuth, async (req, res) => {
     }
 
     const exists = await EmailTemplate.findOne({ key: String(key).trim() });
-    if (exists) return res.status(400).json({ success: false, message: 'Template key already exists' });
+    if (exists) {
+      return res.status(400).json({ success: false, message: 'Template key already exists' });
+    }
 
-    const template = await EmailTemplate.create({ key: String(key).trim(), name: String(name).trim(), subject: String(subject).trim(), body: String(body), isActive: Boolean(isActive) });
-    await AuditLog.create({ eventType: 'template_created', email: '', status: 'success', details: `Template created: ${template.key}` });
+    const template = await EmailTemplate.create({
+      key: String(key).trim(),
+      name: String(name).trim(),
+      subject: String(subject).trim(),
+      body: String(body),
+      isActive: Boolean(isActive)
+    });
+
+    await AuditLog.create({
+      eventType: 'template_created',
+      email: '',
+      status: 'success',
+      details: `Template created: ${template.key}`
+    });
+
     return res.json({ success: true, message: 'Template created successfully', template });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -213,7 +223,9 @@ router.patch('/template/:id', adminAuth, async (req, res) => {
   try {
     const { name, subject, body, isActive } = req.body || {};
     const template = await EmailTemplate.findById(req.params.id);
-    if (!template) return res.status(404).json({ success: false, message: 'Template not found' });
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Template not found' });
+    }
 
     if (typeof name === 'string') template.name = name.trim();
     if (typeof subject === 'string') template.subject = subject.trim();
@@ -221,18 +233,85 @@ router.patch('/template/:id', adminAuth, async (req, res) => {
     if (typeof isActive === 'boolean') template.isActive = isActive;
 
     await template.save();
-    await AuditLog.create({ eventType: 'template_updated', email: '', status: 'success', details: `Template updated: ${template.key}` });
+
+    await AuditLog.create({
+      eventType: 'template_updated',
+      email: '',
+      status: 'success',
+      details: `Template updated: ${template.key}`
+    });
+
     return res.json({ success: true, message: 'Template updated successfully', template });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 });
 
+// ---------- ADMIN SETTINGS ----------
+const DEFAULT_SETTINGS = [
+  { key: 'business_name', value: 'Sembhi Bot Ultimate', category: 'branding' },
+  { key: 'business_tagline', value: 'Professional Trading Automation Platform', category: 'branding' },
+  { key: 'logo_url', value: '', category: 'branding' },
+  { key: 'logo_width', value: '220', category: 'branding' },
+  { key: 'logo_height', value: '54', category: 'branding' },
+  { key: 'support_email', value: 'support@sembhibotultimate.com', category: 'contact' },
+  { key: 'support_phone', value: '0432 563 568', category: 'contact' },
+  { key: 'support_whatsapp', value: '', category: 'contact' },
+  { key: 'support_facebook', value: '', category: 'social' },
+  { key: 'support_instagram', value: '', category: 'social' },
+  { key: 'support_tiktok', value: '', category: 'social' },
+  { key: 'support_youtube', value: '', category: 'social' },
+  { key: 'support_linkedin', value: '', category: 'social' },
+  { key: 'business_location', value: 'Melbourne, Australia', category: 'contact' },
+  { key: 'admin_name', value: 'Site Owner', category: 'admin_profile' },
+  { key: 'admin_email', value: 'support@sembhibotultimate.com', category: 'admin_profile' },
+  { key: 'admin_mobile', value: '', category: 'admin_profile' },
+  { key: 'default_currency', value: 'AUD', category: 'billing' },
+  { key: 'offer_enabled', value: true, category: 'offer' },
+  { key: 'offer_title', value: 'NEW PRODUCTS EVALS UP TO 20% OFF', category: 'offer' },
+  { key: 'offer_subtitle', value: 'Use Code "SBU20"', category: 'offer' },
+  { key: 'offer_code', value: 'SBU20', category: 'offer' },
+  { key: 'offer_button_text', value: 'Coupon "SBU20"', category: 'offer' },
+  { key: 'offer_end_at', value: '', category: 'offer' },
+  { key: 'disclaimer_short', value: 'Futures trading involves substantial risk and is not suitable for every investor. Sembhi Bot Ultimate provides software tools and educational content only and does not provide personal financial advice.', category: 'legal' },
+  { key: 'about_title', value: 'Experience, Strategy, Discipline — Your Edge in the Futures Market.', category: 'content' },
+  { key: 'about_body', value: 'Sembhi Bot Ultimate supports futures traders with structured automation tools, educational guidance, and disciplined execution models focused on markets such as NQ, ES, YM, and GC. We do not provide personal financial advice. All examples, walkthroughs, and tools are provided for educational and analytical purposes only.', category: 'content' },
+  { key: 'how_title', value: 'Learn the reasoning behind every entry and exit.', category: 'content' },
+  { key: 'how_body', value: 'Members can review educational content, platform walkthroughs, and structured trading concepts designed to improve discipline and process.', category: 'content' },
+  { key: 'training_title', value: 'Learn Futures Trading Step-by-Step', category: 'content' },
+  { key: 'training_body', value: 'Access structured tutorials covering market fundamentals, risk management, platform setup, and live examples.', category: 'content' },
+  { key: 'plan_name', value: 'Premium Membership', category: 'plan' },
+  { key: 'plan_price', value: '149', category: 'plan' },
+  { key: 'plan_currency', value: '$', category: 'plan' },
+  { key: 'plan_period', value: '/ month', category: 'plan' },
+  { key: 'performance_engine_name', value: 'Sembhi Performance Engine', category: 'future' },
+  { key: 'trade_copier_name', value: 'Sembhi Trade Copier Free', category: 'future' },
+  { key: 'platform_offers', value: [
+    { name: 'Apex Trader Funding', badge: '80% OFF', desc: 'Enjoy deep discounts on evaluation accounts, perfect for both new and experienced traders.', coupon: 'RAJA1156', cta: 'Get Discount', url: '#', tag: 'BEST DEAL' },
+    { name: 'Take Profit Trader', badge: '40% OFF', desc: 'Affordable and fast funding opportunities with trader-friendly rules.', coupon: 'RAJA1156', cta: 'Get Discount', url: '#', tag: 'POPULAR' },
+    { name: 'Trade Day', badge: '40% OFF', desc: 'Flexible programs designed for consistent profits and growth.', coupon: 'RAJA1156', cta: 'Get Discount', url: '#', tag: 'LIMITED' },
+    { name: 'Funding Ticks', badge: '50% OFF', desc: 'FundingTicks provides industry leading platforms, copy trading and weekly rewards.', coupon: 'RAJA1156', cta: 'Get Discount', url: '#', tag: 'LIMITED' }
+  ], category: 'offers' }
+];
+
 router.post('/settings/seed', adminAuth, async (req, res) => {
   try {
-    await seedDefaults(DEFAULT_SETTINGS, AdminSetting);
-    await AuditLog.create({ eventType: 'settings_seeded', email: '', status: 'success', details: 'Default admin settings seeded' });
-    return res.json({ success: true, message: 'Default admin settings seeded successfully' });
+    for (const item of DEFAULT_SETTINGS) {
+      await AdminSetting.findOneAndUpdate(
+        { key: item.key },
+        { $setOnInsert: item },
+        { upsert: true, new: true }
+      );
+    }
+
+    await AuditLog.create({
+      eventType: 'settings_seeded',
+      email: '',
+      status: 'success',
+      details: 'Default admin settings seeded'
+    });
+
+    return res.json({ success: true, message: 'Default settings seeded successfully' });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -251,104 +330,88 @@ router.patch('/setting/:id', adminAuth, async (req, res) => {
   try {
     const { value } = req.body || {};
     const setting = await AdminSetting.findById(req.params.id);
-    if (!setting) return res.status(404).json({ success: false, message: 'Setting not found' });
+    if (!setting) {
+      return res.status(404).json({ success: false, message: 'Setting not found' });
+    }
 
     setting.value = value;
     await setting.save();
-    await AuditLog.create({ eventType: 'setting_updated', email: '', status: 'success', details: `Setting updated: ${setting.key}` });
+
+    await AuditLog.create({
+      eventType: 'setting_updated',
+      email: '',
+      status: 'success',
+      details: `Setting updated: ${setting.key}`
+    });
+
     return res.json({ success: true, message: 'Setting updated successfully', setting });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 });
 
-router.patch('/setting/key/:key', adminAuth, async (req, res) => {
+
+router.get('/settings-map', adminAuth, async (req, res) => {
   try {
-    const { value, category = 'general' } = req.body || {};
-    const key = String(req.params.key || '').trim();
-    if (!key) return res.status(400).json({ success: false, message: 'Setting key is required' });
-
-    const setting = await AdminSetting.findOneAndUpdate(
-      { key },
-      { key, value, category },
-      { upsert: true, new: true }
-    );
-
-    await AuditLog.create({ eventType: 'setting_updated', email: '', status: 'success', details: `Setting updated by key: ${key}` });
-    return res.json({ success: true, setting });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-router.post('/site-settings/save', adminAuth, async (req, res) => {
-  try {
-    const settings = req.body?.settings || {};
-    const entries = Object.entries(settings);
-    for (const [key, payload] of entries) {
-      const value = payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload, 'value') ? payload.value : payload;
-      const category = payload && typeof payload === 'object' && payload.category ? payload.category : 'general';
-      await AdminSetting.findOneAndUpdate({ key }, { key, value, category }, { upsert: true, new: true });
-    }
-    await AuditLog.create({ eventType: 'site_settings_saved', email: '', status: 'success', details: `Saved ${entries.length} website settings` });
-    return res.json({ success: true, message: 'Website settings saved successfully' });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-router.post('/admin-login', async (req, res) => {
-  try {
-    const { username = '', password = '' } = req.body || {};
-
-    let userSetting = await AdminSetting.findOne({ key: 'admin_login_username' });
-    let passSetting = await AdminSetting.findOne({ key: 'admin_login_password' });
-    if (!userSetting || !passSetting) {
-      await seedDefaults(DEFAULT_SETTINGS, AdminSetting);
-      userSetting = await AdminSetting.findOne({ key: 'admin_login_username' });
-      passSetting = await AdminSetting.findOne({ key: 'admin_login_password' });
-    }
-
-    const okUser = String(userSetting?.value || '').trim();
-    const okPass = String(passSetting?.value || '').trim();
-
-    if (String(username).trim() !== okUser || String(password).trim() !== okPass) {
-      return res.status(401).json({ success: false, message: 'Invalid admin credentials' });
-    }
-
-    return res.json({
-      success: true,
-      message: 'Admin login successful',
-      adminKey: String(process.env.ADMIN_API_KEY || '').trim()
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-router.get('/site-config', async (req, res) => {
-  try {
-    let settings = await AdminSetting.find().sort({ category: 1, key: 1 });
-    if (!settings.length) {
-      await seedDefaults(DEFAULT_SETTINGS, AdminSetting);
-      settings = await AdminSetting.find().sort({ category: 1, key: 1 });
-    }
-    const map = toMap(settings);
-    delete map.admin_login_username;
-    delete map.admin_login_password;
+    const settings = await AdminSetting.find().sort({ key: 1 });
+    const map = {};
+    settings.forEach((row) => { map[row.key] = row.value; });
     return res.json({ success: true, settings: map });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 });
 
+router.post('/settings/bulk', adminAuth, async (req, res) => {
+  try {
+    const { settings = [] } = req.body || {};
+    if (!Array.isArray(settings)) {
+      return res.status(400).json({ success: false, message: 'settings array is required' });
+    }
+
+    const results = [];
+    for (const item of settings) {
+      if (!item || !item.key) continue;
+      const updated = await AdminSetting.findOneAndUpdate(
+        { key: String(item.key).trim() },
+        {
+          key: String(item.key).trim(),
+          value: item.value,
+          category: item.category || 'general'
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      results.push(updated);
+    }
+
+    await AuditLog.create({
+      eventType: 'settings_bulk_updated',
+      email: '',
+      status: 'success',
+      details: `Bulk updated ${results.length} settings`
+    });
+
+    return res.json({ success: true, message: 'Settings saved successfully', settings: results });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ---------- INVOICE AUTO-FILL HELPERS ----------
 router.get('/invoice/payment/:id', adminAuth, async (req, res) => {
   try {
     const payment = await Payment.findById(req.params.id);
-    if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
 
-    const license = payment.email ? await License.findOne({ email: payment.email }).sort({ createdAt: -1 }) : null;
-    const user = payment.email ? await User.findOne({ email: payment.email.toLowerCase().trim() }) : null;
+    const license = payment.email
+      ? await License.findOne({ email: payment.email }).sort({ createdAt: -1 })
+      : null;
+
+    const user = payment.email
+      ? await User.findOne({ email: payment.email.toLowerCase().trim() })
+      : null;
 
     return res.json({
       success: true,
@@ -372,9 +435,13 @@ router.get('/invoice/payment/:id', adminAuth, async (req, res) => {
 router.get('/invoice/license/:id', adminAuth, async (req, res) => {
   try {
     const license = await License.findById(req.params.id);
-    if (!license) return res.status(404).json({ success: false, message: 'License not found' });
+    if (!license) {
+      return res.status(404).json({ success: false, message: 'License not found' });
+    }
 
-    const user = license.email ? await User.findOne({ email: license.email.toLowerCase().trim() }) : null;
+    const user = license.email
+      ? await User.findOne({ email: license.email.toLowerCase().trim() })
+      : null;
 
     return res.json({
       success: true,
