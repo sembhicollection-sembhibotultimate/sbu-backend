@@ -1,24 +1,21 @@
 import OfferCard from "../models/OfferCard.js";
 
-export const getOffers = async (req, res) => {
-  const offers = await OfferCard.find().sort({ sortOrder: 1, createdAt: 1 });
-  res.json({ success: true, data: offers });
-};
+export async function getOffers(req, res) {
+  const data = await OfferCard.find().sort({ sortOrder: 1, createdAt: 1 });
+  res.json({ success: true, data });
+}
 
-export const createOffer = async (req, res) => {
-  const offer = await OfferCard.create(req.body);
-  res.json({ success: true, data: offer });
-};
+export async function createOffer(req, res) {
+  const data = await OfferCard.create(req.body);
+  res.json({ success: true, data });
+}
 
-export const updateOffer = async (req, res) => {
-  const offer = await OfferCard.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-    runValidators: true
-  });
-  res.json({ success: true, data: offer });
-};
+export async function updateOffer(req, res) {
+  const data = await OfferCard.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  res.json({ success: true, data });
+}
 
-export const deleteOffer = async (req, res) => {
+export async function deleteOffer(req, res) {
   await OfferCard.findByIdAndDelete(req.params.id);
-  res.json({ success: true, message: "Offer deleted" });
-};
+  res.json({ success: true });
+}

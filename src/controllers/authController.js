@@ -1,99 +1,129 @@
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
+import LegalDocument from "../models/LegalDocument.js";
+import License from "../models/License.js";
 import { createToken } from "../utils/createToken.js";
+import { buildAgreementPdfBuffer } from "../utils/pdfAgreement.js";
+import { sendAgreementPdfEmail } from "../services/emailService.js";
+import { generateLicenseKey } from "../utils/generateLicenseKey.js";
 
-function sanitizeUser(user) {
-  const clean = user.toObject ? user.toObject() : user;
-  delete clean.passwordHash;
-  return clean;
+function requiredAcceptance(body) {
+  return [
+    body.termsAccepted,
+    body.privacyAccepted,
+    body.refundAccepted,
+    body.riskAccepted
+  ].every(Boolean);
 }
 
-export const signup = async (req, res) => {
+export async function register(req, res) {
   const {
-    fullName = "",
-    email = "",
-    password = "",
+    fullName,
+    email,
+    password,
+    phone,
+    address,
+    country,
+    plan = "monthly",
     couponCode = "",
-    plan = "monthly"
-  } = req.body;
+    termsAccepted,
+    privacyAccepted,
+    refundAccepted,
+    riskAccepted,
+    signatureDataUrl = "",
+    signatureTypedName = ""
+  } = req.body || {};
 
-  if (!email.trim() || !password.trim()) {
-    return res.status(400).json({ success: false, message: "Email and password are required" });
+  if (!fullName || !email || !password || !phone || !address) {
+    return res.status(400).json({ success: false, message: "Name, email, password, phone, and address are required" });
   }
 
-  const normalizedEmail = email.toLowerCase().trim();
-  const existing = await User.findOne({ email: normalizedEmail });
-  if (existing) {
-    return res.status(400).json({ success: false, message: "User already exists" });
+  if (!requiredAcceptance(req.body)) {
+    return res.status(400).json({ success: false, message: "All legal conditions must be accepted before signup" });
+  }
+
+  if (!signatureDataUrl && !signatureTypedName) {
+    return res.status(400).json({ success: false, message: "Digital signature is required" });
+  }
+
+  const exists = await User.findOne({ email: email.toLowerCase().trim() });
+  if (exists) {
+    return res.status(400).json({ success: false, message: "Email already registered" });
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
+
   const user = await User.create({
-    fullName: fullName.trim(),
-    email: normalizedEmail,
+    fullName,
+    email: email.toLowerCase().trim(),
     passwordHash,
+    phone,
+    address,
+    country,
     plan,
-    couponUsed: couponCode?.trim() || ""
+    couponUsed: couponCode?.trim()?.toUpperCase() || "",
+    acceptance: {
+      termsAccepted,
+      privacyAccepted,
+      refundAccepted,
+      riskAccepted,
+      signatureDataUrl,
+      signatureTypedName,
+      acceptedAt: new Date(),
+      ipAddress: req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || req.socket?.remoteAddress || "",
+      userAgent: req.headers["user-agent"] || ""
+    }
   });
 
-  const token = createToken({ userId: user._id, email: user.email });
-  res.json({ success: true, message: "Signup successful", token, user: sanitizeUser(user) });
-};
+  const legalDocs = await LegalDocument.find({ slug: { $in: ["privacy", "refund", "risk", "terms"] } }).sort({ slug: 1 });
+  const pdfBuffer = await buildAgreementPdfBuffer({ user, legalDocs });
+  await sendAgreementPdfEmail({ user, pdfBuffer });
 
-export const login = async (req, res) => {
-  const { email = "", password = "" } = req.body;
-  const user = await User.findOne({ email: email.toLowerCase().trim() });
+  const license = await License.create({
+    userId: user._id,
+    licenseKey: generateLicenseKey(),
+    plan,
+    status: "inactive"
+  });
 
-  if (!user) {
-    return res.status(401).json({ success: false, message: "Invalid email or password" });
-  }
-
-  const matches = await bcrypt.compare(password, user.passwordHash || "");
-  if (!matches) {
-    return res.status(401).json({ success: false, message: "Invalid email or password" });
-  }
-
-  if (user.status !== "active") {
-    return res.status(403).json({ success: false, message: "User account is disabled" });
-  }
-
-  const token = createToken({ userId: user._id, email: user.email });
-  res.json({ success: true, message: "Login successful", token, user: sanitizeUser(user) });
-};
-
-export const forgotPassword = async (req, res) => {
-  const { email = "" } = req.body;
-  if (!email.trim()) {
-    return res.status(400).json({ success: false, message: "Email is required" });
-  }
-
-  const user = await User.findOne({ email: email.toLowerCase().trim() });
-  if (!user) {
-    return res.json({ success: true, message: "If the account exists, reset instructions can be sent." });
-  }
+  const token = createToken(user);
 
   res.json({
     success: true,
-    message: "Forgot password route is ready. Connect email reset delivery next."
+    message: "Signup completed",
+    token,
+    data: {
+      user: {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        plan: user.plan
+      },
+      license
+    }
   });
-};
+}
 
-export const changePassword = async (req, res) => {
-  const { currentPassword = "", newPassword = "" } = req.body;
+export async function login(req, res) {
+  const { email, password } = req.body || {};
+  const user = await User.findOne({ email: email?.toLowerCase().trim() });
+  if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-  if (!newPassword.trim() || newPassword.length < 6) {
-    return res.status(400).json({ success: false, message: "New password must be at least 6 characters" });
-  }
+  const ok = await bcrypt.compare(password || "", user.passwordHash);
+  if (!ok) return res.status(400).json({ success: false, message: "Invalid password" });
 
-  const user = await User.findById(req.user.userId);
-  const matches = await bcrypt.compare(currentPassword, user.passwordHash || "");
-
-  if (!matches) {
-    return res.status(401).json({ success: false, message: "Current password is incorrect" });
-  }
-
-  user.passwordHash = await bcrypt.hash(newPassword, 10);
-  await user.save();
-
-  res.json({ success: true, message: "Password updated successfully" });
-};
+  const token = createToken(user);
+  res.json({
+    success: true,
+    token,
+    data: {
+      user: {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        plan: user.plan,
+        status: user.status
+      }
+    }
+  });
+}

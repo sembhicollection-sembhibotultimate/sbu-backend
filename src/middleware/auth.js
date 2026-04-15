@@ -1,8 +1,8 @@
 import jwt from "jsonwebtoken";
 
-export const auth = (req, res, next) => {
+export function auth(req, res, next) {
   const header = req.headers.authorization || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
 
   if (!token) {
     return res.status(401).json({ success: false, message: "Missing token" });
@@ -14,4 +14,4 @@ export const auth = (req, res, next) => {
   } catch {
     return res.status(401).json({ success: false, message: "Invalid token" });
   }
-};
+}

@@ -5,7 +5,7 @@ const offerCardSchema = new mongoose.Schema(
     imageUrl: { type: String, default: "" },
     title: { type: String, required: true },
     description: { type: String, required: true },
-    ctaText: { type: String, default: "Start Now" },
+    ctaText: { type: String, default: "Get Access" },
     ctaLink: { type: String, default: "/signup.html" },
     couponCode: { type: String, default: "" },
     showCoupon: { type: Boolean, default: false },

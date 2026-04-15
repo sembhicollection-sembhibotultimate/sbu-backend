@@ -1,88 +1,56 @@
-import PaymentRecord from "../models/PaymentRecord.js";
+import Coupon from "../models/Coupon.js";
 import User from "../models/User.js";
-import { resolveCoupon } from "../services/couponService.js";
-import stripe from "../services/stripeService.js";
+import PaymentRecord from "../models/PaymentRecord.js";
+import { getStripe } from "../services/stripeService.js";
 
-const PLAN_CONFIG = {
-  monthly: {
-    amount: 149,
-    label: "Sembhi Bot Ultimate Monthly"
-  }
-};
+function applyCoupon(coupon, amount) {
+  if (!coupon) return { amount, discount: 0 };
+  const discount = coupon.type === "percent" ? (amount * coupon.value) / 100 : coupon.value;
+  return { amount: Math.max(0, amount - discount), discount };
+}
 
-export const createCheckoutSession = async (req, res) => {
-  const {
-    email = "",
-    fullName = "",
-    plan = "monthly",
-    couponCode = ""
-  } = req.body;
-
-  const selectedPlan = PLAN_CONFIG[plan] || PLAN_CONFIG.monthly;
-  const amount = selectedPlan.amount;
-
-  const couponResult = await resolveCoupon({ code: couponCode, plan, amount });
-  if (!couponResult.valid) {
-    return res.status(400).json({ success: false, message: couponResult.message });
-  }
-
-  const finalAmount = couponResult.finalAmount;
-  const normalizedEmail = email.toLowerCase().trim();
-  const user = normalizedEmail ? await User.findOne({ email: normalizedEmail }) : null;
-
-  const record = await PaymentRecord.create({
-    customerEmail: normalizedEmail,
-    paymentStatus: "pending",
-    amount: finalAmount,
-    currency: "usd",
-    plan,
-    couponCode: couponCode?.trim().toUpperCase() || "",
-    userId: user?._id || null
-  });
+export async function createCheckoutSession(req, res) {
+  const { email, plan = "monthly", couponCode = "" } = req.body || {};
+  const stripe = getStripe();
 
   if (!stripe || !process.env.STRIPE_PRICE_MONTHLY) {
-    return res.json({
-      success: true,
-      mode: "placeholder",
-      message: "Stripe keys are not configured yet. Backend flow is ready.",
-      data: {
-        checkoutUrl: "#",
-        paymentRecordId: record._id,
-        finalAmount
-      }
-    });
+    return res.status(400).json({ success: false, message: "Stripe not configured" });
   }
+
+  let amount = 149;
+  let coupon = null;
+  const normalizedCoupon = couponCode.trim().toUpperCase();
+
+  if (normalizedCoupon) {
+    coupon = await Coupon.findOne({ code: normalizedCoupon, active: true });
+  }
+
+  const calc = applyCoupon(coupon, amount);
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
-    customer_email: normalizedEmail || undefined,
-    line_items: [
-      {
-        price: process.env.STRIPE_PRICE_MONTHLY,
-        quantity: 1
-      }
-    ],
+    customer_email: email,
+    line_items: [{ price: process.env.STRIPE_PRICE_MONTHLY, quantity: 1 }],
+    allow_promotion_codes: true,
+    success_url: `${process.env.STRIPE_BILLING_PORTAL_RETURN_URL}?checkout=success`,
+    cancel_url: `${process.env.STRIPE_BILLING_PORTAL_RETURN_URL}?checkout=cancelled`,
     metadata: {
-      fullName,
-      email: normalizedEmail,
+      email,
       plan,
-      couponCode: couponCode?.trim().toUpperCase() || "",
-      paymentRecordId: String(record._id),
-      userId: user?._id ? String(user._id) : ""
-    },
-    success_url: `${process.env.FRONTEND_URL}/portal.html?checkout=success`,
-    cancel_url: `${process.env.FRONTEND_URL}/signup.html?checkout=cancelled`
-  });
-
-  record.stripeSessionId = session.id;
-  await record.save();
-
-  res.json({
-    success: true,
-    data: {
-      checkoutUrl: session.url,
-      paymentRecordId: record._id,
-      finalAmount
+      couponCode: normalizedCoupon,
+      previewFinalAmount: String(calc.amount)
     }
   });
-};
+
+  await PaymentRecord.create({
+    customerEmail: email,
+    stripeSessionId: session.id,
+    amount: calc.amount,
+    currency: "usd",
+    plan,
+    couponCode: normalizedCoupon,
+    paymentStatus: "pending"
+  });
+
+  res.json({ success: true, url: session.url });
+}

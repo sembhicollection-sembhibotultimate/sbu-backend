@@ -1,24 +1,35 @@
 import mongoose from "mongoose";
 
-const profileSchema = new mongoose.Schema(
+const acceptanceSchema = new mongoose.Schema(
   {
-    phone: { type: String, default: "" },
-    country: { type: String, default: "" },
-    address: { type: String, default: "" }
+    termsAccepted: { type: Boolean, default: false },
+    privacyAccepted: { type: Boolean, default: false },
+    refundAccepted: { type: Boolean, default: false },
+    riskAccepted: { type: Boolean, default: false },
+    signatureDataUrl: { type: String, default: "" },
+    signatureTypedName: { type: String, default: "" },
+    acceptedAt: { type: Date, default: null },
+    ipAddress: { type: String, default: "" },
+    userAgent: { type: String, default: "" }
   },
   { _id: false }
 );
 
 const userSchema = new mongoose.Schema(
   {
-    fullName: { type: String, default: "" },
+    fullName: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    passwordHash: { type: String, default: "" },
-    status: { type: String, enum: ["active", "disabled"], default: "active" },
+    passwordHash: { type: String, required: true },
+    phone: { type: String, default: "" },
+    address: { type: String, default: "" },
+    country: { type: String, default: "" },
     plan: { type: String, default: "monthly" },
-    couponUsed: { type: String, default: "" },
+    status: { type: String, enum: ["active", "inactive", "disabled"], default: "active" },
     stripeCustomerId: { type: String, default: "" },
-    profile: { type: profileSchema, default: () => ({}) }
+    stripeSubscriptionId: { type: String, default: "" },
+    couponUsed: { type: String, default: "" },
+    agreementPdfFileName: { type: String, default: "" },
+    acceptance: { type: acceptanceSchema, default: () => ({}) }
   },
   { timestamps: true }
 );

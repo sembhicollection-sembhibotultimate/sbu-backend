@@ -2,44 +2,42 @@ import SiteSettings from "../models/SiteSettings.js";
 import HomeSections from "../models/HomeSections.js";
 import LiveOfferBar from "../models/LiveOfferBar.js";
 
-export const getCmsBundle = async (req, res) => {
-  let siteSettings = await SiteSettings.findOne();
-  let homeSections = await HomeSections.findOne();
-  let liveOfferBar = await LiveOfferBar.findOne();
-
-  if (!siteSettings) siteSettings = await SiteSettings.create({});
-  if (!homeSections) homeSections = await HomeSections.create({});
-  if (!liveOfferBar) liveOfferBar = await LiveOfferBar.create({});
+export async function getCmsBundle(req, res) {
+  const [siteSettings, homeSections, liveOfferBar] = await Promise.all([
+    SiteSettings.findOne(),
+    HomeSections.findOne(),
+    LiveOfferBar.findOne()
+  ]);
 
   res.json({
     success: true,
     data: { siteSettings, homeSections, liveOfferBar }
   });
-};
+}
 
-export const updateSiteSettings = async (req, res) => {
-  const existing = await SiteSettings.findOne();
-  const updated = existing
-    ? await SiteSettings.findByIdAndUpdate(existing._id, req.body, { new: true, runValidators: true })
+export async function updateSiteSettings(req, res) {
+  const current = await SiteSettings.findOne();
+  const saved = current
+    ? await SiteSettings.findByIdAndUpdate(current._id, req.body, { new: true, runValidators: true })
     : await SiteSettings.create(req.body);
 
-  res.json({ success: true, data: updated });
-};
+  res.json({ success: true, data: saved });
+}
 
-export const updateHomeSections = async (req, res) => {
-  const existing = await HomeSections.findOne();
-  const updated = existing
-    ? await HomeSections.findByIdAndUpdate(existing._id, req.body, { new: true, runValidators: true })
+export async function updateHomeSections(req, res) {
+  const current = await HomeSections.findOne();
+  const saved = current
+    ? await HomeSections.findByIdAndUpdate(current._id, req.body, { new: true, runValidators: true })
     : await HomeSections.create(req.body);
 
-  res.json({ success: true, data: updated });
-};
+  res.json({ success: true, data: saved });
+}
 
-export const updateLiveOfferBar = async (req, res) => {
-  const existing = await LiveOfferBar.findOne();
-  const updated = existing
-    ? await LiveOfferBar.findByIdAndUpdate(existing._id, req.body, { new: true, runValidators: true })
+export async function updateLiveOfferBar(req, res) {
+  const current = await LiveOfferBar.findOne();
+  const saved = current
+    ? await LiveOfferBar.findByIdAndUpdate(current._id, req.body, { new: true, runValidators: true })
     : await LiveOfferBar.create(req.body);
 
-  res.json({ success: true, data: updated });
-};
+  res.json({ success: true, data: saved });
+}

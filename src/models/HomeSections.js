@@ -1,86 +1,39 @@
 import mongoose from "mongoose";
 
-const faqItemSchema = new mongoose.Schema(
-  {
-    question: { type: String, default: "" },
-    answer: { type: String, default: "" }
-  },
-  { _id: false }
-);
-
-const reviewItemSchema = new mongoose.Schema(
-  {
-    name: { type: String, default: "" },
-    text: { type: String, default: "" },
-    rating: { type: Number, default: 5 }
-  },
-  { _id: false }
-);
-
-const stepSchema = new mongoose.Schema(
-  {
-    title: { type: String, default: "" },
-    description: { type: String, default: "" }
-  },
-  { _id: false }
-);
-
-const sectionToggleSchema = new mongoose.Schema(
-  {
-    enabled: { type: Boolean, default: true },
-    title: { type: String, default: "" },
-    subtitle: { type: String, default: "" },
-    content: { type: String, default: "" }
-  },
-  { _id: false }
-);
+const listItemSchema = new mongoose.Schema({ title: String, description: String }, { _id: false });
+const reviewSchema = new mongoose.Schema({ name: String, text: String, rating: Number }, { _id: false });
+const faqSchema = new mongoose.Schema({ question: String, answer: String }, { _id: false });
 
 const homeSectionsSchema = new mongoose.Schema(
   {
-    header: {
-      enabled: { type: Boolean, default: true },
-      announcementText: { type: String, default: "" }
-    },
     hero: {
-      enabled: { type: Boolean, default: true },
       eyebrow: { type: String, default: "Professional futures trading software" },
       title: { type: String, default: "Sembhi Bot Ultimate" },
-      subtitle: { type: String, default: "Advanced futures trading software with professional workflow, licensing, and support." },
+      subtitle: { type: String, default: "Structured software access, portal control, and licensing workflow." },
       primaryCtaText: { type: String, default: "Get Access" },
       primaryCtaLink: { type: String, default: "/signup.html" },
       secondaryCtaText: { type: String, default: "View Features" },
       secondaryCtaLink: { type: String, default: "#offers" }
     },
-    about: { type: sectionToggleSchema, default: () => ({ title: "Built for serious futures workflow" }) },
-    offers: { type: sectionToggleSchema, default: () => ({ title: "Platform Access" }) },
+    about: {
+      title: { type: String, default: "Built for serious workflow" },
+      content: { type: String, default: "One clean SaaS flow for software access, education, and licensing." }
+    },
     workflow: {
-      enabled: { type: Boolean, default: true },
-      title: { type: String, default: "How It Works" },
-      subtitle: { type: String, default: "Simple onboarding from checkout to software access." },
-      steps: { type: [stepSchema], default: [] }
+      title: { type: String, default: "How it works" },
+      items: { type: [listItemSchema], default: [{ title: "Join", description: "Create your account." }, { title: "Checkout", description: "Secure Stripe billing flow." }, { title: "Portal", description: "Manage account and license." }] }
     },
     training: {
-      enabled: { type: Boolean, default: true },
-      title: { type: String, default: "Training & Support" },
-      subtitle: { type: String, default: "Educational guidance and onboarding resources." },
-      items: { type: [stepSchema], default: [] }
+      title: { type: String, default: "Training & support" },
+      items: { type: [listItemSchema], default: [{ title: "Setup Help", description: "Onboarding support." }, { title: "Member Access", description: "Portal-guided workflow." }] }
     },
     reviews: {
-      enabled: { type: Boolean, default: true },
-      title: { type: String, default: "User Feedback" },
-      subtitle: { type: String, default: "What members say about the platform experience." },
-      items: { type: [reviewItemSchema], default: [] }
+      title: { type: String, default: "Reviews" },
+      items: { type: [reviewSchema], default: [{ name: "Member", text: "Clean onboarding and portal.", rating: 5 }] }
     },
     faq: {
-      enabled: { type: Boolean, default: true },
-      title: { type: String, default: "Frequently Asked Questions" },
-      subtitle: { type: String, default: "Clear answers before you join." },
-      items: { type: [faqItemSchema], default: [] }
-    },
-    footer: {
-      enabled: { type: Boolean, default: true },
-      title: { type: String, default: "Sembhi Bot Ultimate" },
-      content: { type: String, default: "Professional futures trading software and educational platform access." }
+      title: { type: String, default: "FAQ" },
+      items: { type: [faqSchema], default: [{ question: "Is a coupon required?", answer: "No. Blank coupon still allows checkout." }] }
     }
   },
   { timestamps: true }

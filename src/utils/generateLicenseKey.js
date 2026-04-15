@@ -1,6 +1,4 @@
-import crypto from "crypto";
-
 export function generateLicenseKey() {
-  const raw = crypto.randomBytes(12).toString("hex").toUpperCase();
-  return `SBU-${raw.slice(0, 6)}-${raw.slice(6, 12)}-${raw.slice(12, 18)}`;
+  const part = () => Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `SBU-${part()}-${part()}-${part()}-${part()}`;
 }
