@@ -288,6 +288,26 @@ router.get('/settings', adminAuth, async (req, res) => {
   }
 });
 
+
+router.get('/settings-map', adminAuth, async (req, res) => {
+  try {
+    const settings = await AdminSetting.find();
+    const map = {};
+    settings.forEach(s => { map[s.key] = s.value; });
+    return res.json({ success: true, settings: map });
+  } catch (error) { return res.status(500).json({ success: false, message: error.message }); }
+});
+
+router.post('/settings/bulk', adminAuth, async (req, res) => {
+  try {
+    const payload = req.body?.settings || {};
+    for (const [key, value] of Object.entries(payload)) {
+      await AdminSetting.findOneAndUpdate({ key }, { key, value, category: 'cms' }, { upsert: true, new: true });
+    }
+    return res.json({ success: true, message: 'Settings saved successfully' });
+  } catch (error) { return res.status(500).json({ success: false, message: error.message }); }
+});
+
 router.patch('/setting/:id', adminAuth, async (req, res) => {
   try {
     const { value } = req.body || {};

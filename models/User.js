@@ -9,11 +9,12 @@ const userSchema = new mongoose.Schema(
     mobile: { type: String, default: '' },
     address: { type: String, default: '' },
     password: { type: String, default: '' },
-    stripeCustomerId: { type: String, default: '' },
+    signature: { type: String, default: '' },
     profilePhoto: { type: String, default: '' },
+    stripeCustomerId: { type: String, default: '' },
     isActive: { type: Boolean, default: true }
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);
