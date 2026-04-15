@@ -1,20 +1,29 @@
-import License from "../models/License.js";
+export const validateLicense = async (req, res) => {
+  const { licenseKey } = req.body;
 
-export async function validateLicense(req, res) {
-  const { licenseKey, hwid = "" } = req.body || {};
-  const license = await License.findOne({ licenseKey });
-
-  if (!license) return res.status(404).json({ success: false, message: "License not found" });
-  if (license.status !== "active") return res.status(403).json({ success: false, message: "License inactive" });
-
-  if (!license.hwid && hwid) {
-    license.hwid = hwid;
-  } else if (license.hwid && hwid && license.hwid !== hwid) {
-    return res.status(403).json({ success: false, message: "License already active on another machine" });
+  // 🔥 OWNER KEY DIRECT CHECK
+  if (licenseKey === process.env.OWNER_LICENSE_KEY) {
+    return res.json({
+      success: true,
+      status: "active",
+      plan: "owner",
+      isOwner: true
+    });
   }
 
-  license.lastValidatedAt = new Date();
-  await license.save();
+  // normal DB check
+  const license = await License.findOne({ licenseKey });
 
-  res.json({ success: true, message: "License valid" });
-}
+  if (!license || license.status !== "active") {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid license"
+    });
+  }
+
+  res.json({
+    success: true,
+    status: license.status,
+    plan: license.plan
+  });
+};
