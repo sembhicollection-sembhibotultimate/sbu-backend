@@ -1,94 +1,101 @@
 import express from "express";
 import Stripe from "stripe";
-import User from "../models/User.js";
-import License from "../models/License.js";
 import PaymentRecord from "../models/PaymentRecord.js";
-import Coupon from "../models/Coupon.js";
-import { getStripe } from "../services/stripeService.js";
-import { generateLicenseKey } from "../utils/generateLicenseKey.js";
+import { createOrRenewSubscriptionLicense, deactivateLicenseBySubscriptionId } from "../services/licenseService.js";
+import { sendLicenseEmail } from "../services/emailService.js";
 
 const router = express.Router();
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 router.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
-  const stripe = getStripe();
-  if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
-    return res.status(400).send("Stripe webhook not configured");
-  }
-
   let event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, req.headers["stripe-signature"], process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    const signature = req.headers["stripe-signature"];
+    event = stripe.webhooks.constructEvent(req.body, signature, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (error) {
+    console.error("Stripe webhook signature error:", error.message);
+    return res.status(400).send(`Webhook Error: ${error.message}`);
   }
 
   try {
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      const email = session.customer_details?.email || session.customer_email || session.metadata?.email;
-      let user = await User.findOne({ email });
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        const email =
+          session.customer_details?.email ||
+          session.customer_email ||
+          session.metadata?.email ||
+          "";
+        const fullName = session.customer_details?.name || session.metadata?.fullName || "";
+        const stripeCustomerId = session.customer || "";
+        const stripeSubscriptionId = session.subscription || "";
+        const plan = session.metadata?.plan || "monthly";
 
-      if (user) {
-        user.stripeCustomerId = session.customer || user.stripeCustomerId;
-        user.status = "active";
-        await user.save();
+        const { user, license } = await createOrRenewSubscriptionLicense({
+          email,
+          stripeCustomerId,
+          stripeSubscriptionId,
+          plan
+        });
 
-        let license = await License.findOne({ userId: user._id });
-        if (!license) {
-          license = await License.create({ userId: user._id, licenseKey: generateLicenseKey(), status: "active", plan: user.plan });
-        } else {
-          license.status = "active";
-          await license.save();
-        }
+        await PaymentRecord.create({
+          userId: user._id,
+          customerEmail: email,
+          stripeSessionId: session.id,
+          stripeCustomerId,
+          stripeSubscriptionId,
+          amount: session.amount_total ? session.amount_total / 100 : 0,
+          currency: session.currency || "usd",
+          paymentStatus: "paid"
+        });
 
-        const subId = session.subscription || "";
-        if (subId) {
-          user.stripeSubscriptionId = subId;
-          await user.save();
-        }
-
-        const rec = await PaymentRecord.findOne({ stripeSessionId: session.id });
-        if (rec) {
-          rec.userId = user._id;
-          rec.customerEmail = email;
-          rec.stripeCustomerId = session.customer || "";
-          rec.stripeSubscriptionId = session.subscription || "";
-          rec.paymentStatus = "paid";
-          await rec.save();
-        }
-
-        const couponCode = session.metadata?.couponCode?.trim()?.toUpperCase();
-        if (couponCode) {
-          await Coupon.findOneAndUpdate({ code: couponCode }, { $inc: { usedCount: 1 } });
-        }
+        await sendLicenseEmail({
+          to: email,
+          fullName,
+          licenseKey: license.licenseKey,
+          portalUrl: process.env.PORTAL_URL || "https://sembhibotultimate.com/portal.html"
+        });
+        break;
       }
-    }
 
-    if (event.type === "customer.subscription.deleted") {
-      const subscription = event.data.object;
-      const user = await User.findOne({ stripeSubscriptionId: subscription.id });
-      if (user) {
-        user.status = "inactive";
-        await user.save();
-        await License.updateMany({ userId: user._id }, { status: "inactive" });
+      case "invoice.paid": {
+        const invoice = event.data.object;
+        const email = invoice.customer_email || invoice.customer_details?.email || "";
+        const stripeCustomerId = invoice.customer || "";
+        const stripeSubscriptionId = invoice.subscription || "";
+        if (stripeSubscriptionId && email) {
+          await createOrRenewSubscriptionLicense({
+            email,
+            stripeCustomerId,
+            stripeSubscriptionId,
+            plan: "monthly"
+          });
+        }
+        break;
       }
+
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object;
+        await deactivateLicenseBySubscriptionId(subscription.id);
+        break;
+      }
+
+      case "customer.subscription.updated": {
+        const subscription = event.data.object;
+        if (subscription.status === "canceled" || subscription.cancel_at_period_end) {
+          await deactivateLicenseBySubscriptionId(subscription.id);
+        }
+        break;
+      }
+
+      default:
+        break;
     }
 
-    if (event.type === "invoice.paid") {
-      const invoice = event.data.object;
-      await PaymentRecord.create({
-        stripeCustomerId: invoice.customer || "",
-        stripeSubscriptionId: invoice.subscription || "",
-        amount: Number(invoice.amount_paid || 0) / 100,
-        currency: invoice.currency || "usd",
-        paymentStatus: "paid"
-      });
-    }
-
-    res.json({ received: true });
+    return res.json({ received: true });
   } catch (error) {
-    console.error(error);
-    res.status(500).send("Webhook processing error");
+    console.error("Stripe webhook processing error:", error);
+    return res.status(500).json({ received: false, message: error.message });
   }
 });
 

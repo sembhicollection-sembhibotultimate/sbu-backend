@@ -1,39 +1,43 @@
 import nodemailer from "nodemailer";
 
-function canSendEmail() {
-  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+function getTransporter() {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host || !user || !pass) return null;
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass }
+  });
 }
 
-export async function sendAgreementPdfEmail({ user, pdfBuffer }) {
-  if (!canSendEmail()) {
-    console.warn("SMTP not configured. Agreement email skipped.");
-    return { sent: false };
+export async function sendLicenseEmail({ to, fullName = "", licenseKey, portalUrl }) {
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.log("SMTP not configured. Skipping license email.");
+    return;
   }
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
-
-  const to = process.env.ADMIN_NOTIFY_EMAIL || process.env.SUPPORT_EMAIL;
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111;">
+      <h2>Sembhi Bot Ultimate</h2>
+      <p>Hello ${fullName || "Member"},</p>
+      <p>Your access has been activated.</p>
+      <p><strong>License Key:</strong> ${licenseKey}</p>
+      <p><strong>Portal:</strong> <a href="${portalUrl}">${portalUrl}</a></p>
+      <p>Keep this key private. This product is software and educational workflow support. It is not personal financial advice.</p>
+    </div>
+  `;
 
   await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
     to,
-    subject: `New SBU signup agreement - ${user.fullName}`,
-    text: `A new signup agreement was completed by ${user.fullName} (${user.email}). The PDF is attached.`,
-    attachments: [
-      {
-        filename: `SBU-Agreement-${String(user.fullName || "User").replace(/\s+/g, "-")}.pdf`,
-        content: pdfBuffer
-      }
-    ]
+    subject: "Your Sembhi Bot Ultimate License",
+    html
   });
-
-  return { sent: true };
 }
