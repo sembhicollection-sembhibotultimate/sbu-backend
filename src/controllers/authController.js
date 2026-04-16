@@ -8,12 +8,7 @@ import { sendAgreementPdfEmail } from "../services/emailService.js";
 import { generateLicenseKey } from "../utils/generateLicenseKey.js";
 
 function requiredAcceptance(body) {
-  return [
-    body.termsAccepted,
-    body.privacyAccepted,
-    body.refundAccepted,
-    body.riskAccepted
-  ].every(Boolean);
+  return [body.termsAccepted, body.privacyAccepted, body.refundAccepted, body.riskAccepted].every(Boolean);
 }
 
 export async function register(req, res) {
@@ -34,34 +29,32 @@ export async function register(req, res) {
     signatureTypedName = ""
   } = req.body || {};
 
-  if (!fullName || !email || !password || !phone || !address) {
-    return res.status(400).json({ success: false, message: "Name, email, password, phone, and address are required" });
+  if (!fullName || !email || !password || !phone || !address || !country) {
+    return res.status(400).json({ success: false, message: "Name, email, password, phone, address, and country are required" });
   }
-
   if (!requiredAcceptance(req.body)) {
     return res.status(400).json({ success: false, message: "All legal conditions must be accepted before signup" });
   }
-
   if (!signatureDataUrl && !signatureTypedName) {
     return res.status(400).json({ success: false, message: "Digital signature is required" });
   }
 
-  const exists = await User.findOne({ email: email.toLowerCase().trim() });
-  if (exists) {
-    return res.status(400).json({ success: false, message: "Email already registered" });
-  }
+  const cleanEmail = email.toLowerCase().trim();
+  const exists = await User.findOne({ email: cleanEmail });
+  if (exists) return res.status(400).json({ success: false, message: "Email already registered" });
 
   const passwordHash = await bcrypt.hash(password, 10);
 
   const user = await User.create({
     fullName,
-    email: email.toLowerCase().trim(),
+    email: cleanEmail,
     passwordHash,
     phone,
     address,
     country,
     plan,
     couponUsed: couponCode?.trim()?.toUpperCase() || "",
+    status: "active",
     acceptance: {
       termsAccepted,
       privacyAccepted,
@@ -83,22 +76,17 @@ export async function register(req, res) {
     userId: user._id,
     licenseKey: generateLicenseKey(),
     plan,
-    status: "inactive"
+    status: "inactive",
+    productName: "Sembhi Bot Ultimate"
   });
 
   const token = createToken(user);
-
   res.json({
     success: true,
     message: "Signup completed",
     token,
     data: {
-      user: {
-        _id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        plan: user.plan
-      },
+      user: { _id: user._id, fullName: user.fullName, email: user.email, plan: user.plan },
       license
     }
   });

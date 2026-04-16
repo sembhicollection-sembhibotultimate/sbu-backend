@@ -1,6 +1,6 @@
 {
-  "name": "sbu-backend-v6",
-  "version": "6.0.0",
+  "name": "sbu-backend-v7",
+  "version": "7.0.0",
   "type": "module",
   "main": "src/server.js",
   "scripts": {
