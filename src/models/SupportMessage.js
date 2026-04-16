@@ -23,5 +23,4 @@ const supportMessageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.models.SupportMessage ||
-  mongoose.model("SupportMessage", supportMessageSchema);
+export default mongoose.models.SupportMessage || mongoose.model("SupportMessage", supportMessageSchema);

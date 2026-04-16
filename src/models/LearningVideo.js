@@ -12,5 +12,4 @@ const learningVideoSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.models.LearningVideo ||
-  mongoose.model("LearningVideo", learningVideoSchema);
+export default mongoose.models.LearningVideo || mongoose.model("LearningVideo", learningVideoSchema);

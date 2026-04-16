@@ -11,5 +11,4 @@ const downloadItemSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.models.DownloadItem ||
-  mongoose.model("DownloadItem", downloadItemSchema);
+export default mongoose.models.DownloadItem || mongoose.model("DownloadItem", downloadItemSchema);
