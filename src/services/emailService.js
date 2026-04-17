@@ -5,7 +5,6 @@ function getTransporter() {
   const port = Number(process.env.SMTP_PORT || 587);
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
-
   if (!host || !user || !pass) return null;
 
   return nodemailer.createTransport({
@@ -25,7 +24,17 @@ async function sendMailSafe(payload) {
   return transporter.sendMail(payload);
 }
 
-export async function sendLicenseEmail({ to, fullName = "", licenseKey, portalUrl, plan = "monthly" }) {
+export async function sendAgreementPdfEmail({ to, pdfBuffer }) {
+  return sendMailSafe({
+    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+    to,
+    subject: "User Agreement PDF",
+    text: "Attached is the user agreement PDF.",
+    attachments: [{ filename: "agreement.pdf", content: pdfBuffer }]
+  });
+}
+
+export async function sendLicenseIssuedEmail({ to, fullName = "", licenseKey, plan = "monthly", portalUrl = "" }) {
   return sendMailSafe({
     from: process.env.FROM_EMAIL || process.env.SMTP_USER,
     to,
@@ -38,19 +47,8 @@ export async function sendLicenseEmail({ to, fullName = "", licenseKey, portalUr
         <p><strong>Plan:</strong> ${plan}</p>
         <p><strong>License Key:</strong> ${licenseKey}</p>
         <p><strong>Portal:</strong> <a href="${portalUrl}">${portalUrl}</a></p>
-        <p>Please keep your license key private.</p>
       </div>
     `
-  });
-}
-
-export async function sendAgreementPdfEmail({ user, pdfBuffer }) {
-  return sendMailSafe({
-    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
-    to: process.env.ADMIN_EMAIL || process.env.FROM_EMAIL || process.env.SMTP_USER,
-    subject: `New user agreement: ${user?.fullName || ""} (${user?.email || ""})`,
-    text: "Attached is the signed user agreement PDF.",
-    attachments: [{ filename: "agreement.pdf", content: pdfBuffer }]
   });
 }
 

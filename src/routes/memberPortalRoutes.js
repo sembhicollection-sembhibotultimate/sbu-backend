@@ -1,16 +1,14 @@
 import express from "express";
 import {
-  getMemberPortal,
-  updateMemberProfile,
-  createPortalMessage,
-  seedPortalResources
+  createSupportMessage,
+  getPortalData,
+  updatePortalProfile
 } from "../controllers/memberPortalController.js";
 
 const router = express.Router();
 
-router.get("/portal", getMemberPortal);
-router.put("/portal/profile", updateMemberProfile);
-router.post("/portal/message", createPortalMessage);
-router.post("/portal/seed-resources", seedPortalResources);
+router.get("/portal", getPortalData);
+router.put("/portal/profile", updatePortalProfile);
+router.post("/portal/message", createSupportMessage);
 
 export default router;

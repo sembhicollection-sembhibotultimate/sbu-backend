@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const learningVideoSchema = new mongoose.Schema(
+const schema = new mongoose.Schema(
   {
     title: { type: String, required: true },
     description: { type: String, default: "" },
@@ -12,4 +12,4 @@ const learningVideoSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.models.LearningVideo || mongoose.model("LearningVideo", learningVideoSchema);
+export default mongoose.models.LearningVideo || mongoose.model("LearningVideo", schema);

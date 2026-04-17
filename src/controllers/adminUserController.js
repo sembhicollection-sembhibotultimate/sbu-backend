@@ -4,25 +4,7 @@ import License from "../models/License.js";
 import PaymentRecord from "../models/PaymentRecord.js";
 import SupportMessage from "../models/SupportMessage.js";
 import { generateLicenseKey } from "../utils/generateLicenseKey.js";
-import { sendBulkEmail, sendLicenseEmail, sendSimpleEmail } from "../services/emailService.js";
-
-function formatAgreement(user) {
-  const acc = user.acceptance || {};
-  return {
-    signatureTypedName: acc.signatureTypedName || "",
-    signatureImage: acc.signatureDataUrl || "",
-    createdAt: acc.acceptedAt || user.createdAt,
-    acceptance: {
-      acceptedAt: acc.acceptedAt || null,
-      ip: acc.ipAddress || "",
-      userAgent: acc.userAgent || "",
-      terms: !!acc.termsAccepted,
-      privacy: !!acc.privacyAccepted,
-      refund: !!acc.refundAccepted,
-      risk: !!acc.riskAccepted
-    }
-  };
-}
+import { sendBulkEmail, sendLicenseIssuedEmail, sendSimpleEmail } from "../services/emailService.js";
 
 export async function getUsers(req, res) {
   const data = await User.find().sort({ createdAt: -1 }).select("-passwordHash");
@@ -39,6 +21,7 @@ export async function getUserDetail(req, res) {
     SupportMessage.find({ userId: user._id }).sort({ createdAt: -1 })
   ]);
 
+  const acceptance = user.acceptance || {};
   res.json({
     success: true,
     data: {
@@ -46,7 +29,20 @@ export async function getUserDetail(req, res) {
       licenses,
       payments,
       messages,
-      agreement: formatAgreement(user)
+      agreement: {
+        acceptance: {
+          terms: acceptance.termsAccepted,
+          privacy: acceptance.privacyAccepted,
+          refund: acceptance.refundAccepted,
+          risk: acceptance.riskAccepted,
+          acceptedAt: acceptance.acceptedAt,
+          ip: acceptance.ipAddress,
+          userAgent: acceptance.userAgent
+        },
+        signatureTypedName: acceptance.signatureTypedName || "",
+        signatureImage: acceptance.signatureDataUrl || "",
+        createdAt: user.createdAt
+      }
     }
   });
 }
@@ -60,21 +56,20 @@ export async function updateUser(req, res) {
     delete update.password;
   }
 
-  const data = await User.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).select("-passwordHash");
-  if (!data) return res.status(404).json({ success: false, message: "User not found" });
+  const data = await User.findByIdAndUpdate(req.params.id, update, {
+    new: true,
+    runValidators: true
+  }).select("-passwordHash");
   res.json({ success: true, data });
 }
 
 export async function toggleUserStatus(req, res) {
   const user = await User.findById(req.params.id);
   if (!user) return res.status(404).json({ success: false, message: "User not found" });
-
   const nextStatus = user.status === "active" ? "inactive" : "active";
   user.status = nextStatus;
   await user.save();
-
   await License.updateMany({ userId: user._id }, { status: nextStatus === "active" ? "active" : "inactive" });
-
   res.json({ success: true, data: user });
 }
 
@@ -98,10 +93,11 @@ export async function createLicenseForUser(req, res) {
 
   const data = await License.create({
     userId: req.params.id,
-    licenseKey: generateLicenseKey(),
+    licenseKey: generateLicenseKey("SBU"),
     productName,
     status: "active",
     plan,
+    hwid: "",
     expiresAt
   });
 
@@ -109,15 +105,20 @@ export async function createLicenseForUser(req, res) {
   await user.save();
 
   if (sendEmail && user.email) {
-    await sendLicenseEmail({
+    await sendLicenseIssuedEmail({
       to: user.email,
       fullName: user.fullName,
       licenseKey: data.licenseKey,
-      portalUrl: process.env.PORTAL_URL || "https://sembhibotultimate.com/portal.html",
-      plan
+      plan,
+      portalUrl: process.env.PORTAL_URL || "https://sembhibotultimate.com/portal.html"
     });
   }
 
+  res.json({ success: true, data });
+}
+
+export async function getLicenses(req, res) {
+  const data = await License.find().sort({ createdAt: -1 });
   res.json({ success: true, data });
 }
 
@@ -126,42 +127,24 @@ export async function getUserLicenses(req, res) {
   res.json({ success: true, data });
 }
 
-export async function getLicenses(req, res) {
-  const data = await License.find().populate("userId", "fullName email").sort({ createdAt: -1 });
-  res.json({ success: true, data });
-}
-
 export async function updateLicense(req, res) {
-  const data = await License.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-  if (!data) return res.status(404).json({ success: false, message: "License not found" });
-  res.json({ success: true, data });
-}
-
-export async function updateUserLicense(req, res) {
-  const data = await License.findOneAndUpdate(
-    { _id: req.params.licenseId, userId: req.params.id },
-    req.body,
-    { new: true, runValidators: true }
-  );
-  if (!data) return res.status(404).json({ success: false, message: "License not found" });
+  const data = await License.findByIdAndUpdate(req.params.licenseId || req.params.id, req.body, {
+    new: true,
+    runValidators: true
+  });
   res.json({ success: true, data });
 }
 
 export async function deleteLicense(req, res) {
-  await License.findByIdAndDelete(req.params.id);
-  res.json({ success: true });
-}
-
-export async function deleteUserLicense(req, res) {
-  await License.findOneAndDelete({ _id: req.params.licenseId, userId: req.params.id });
+  await License.findByIdAndDelete(req.params.licenseId || req.params.id);
   res.json({ success: true });
 }
 
 export async function sendMessageToUser(req, res) {
-  const user = await User.findById(req.params.id).select("email fullName");
+  const user = await User.findById(req.params.id);
   if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-  const { subject, message } = req.body || {};
+  const { subject, message } = req.body;
   await sendSimpleEmail({
     to: user.email,
     subject,
@@ -172,19 +155,17 @@ export async function sendMessageToUser(req, res) {
   res.json({ success: true, message: "Email sent" });
 }
 
-export async function sendBulkMessage(req, res) {
-  const { subject, message } = req.body || {};
-  const users = await User.find({ status: "active" }).select("email");
+export async function sendBulkMessageToUsers(req, res) {
+  const { subject, message } = req.body;
+  const users = await User.find({ status: "active" }, "email");
   const recipients = users.map((u) => u.email).filter(Boolean);
-
   await sendBulkEmail({
     recipients,
     subject,
     html: `<div style="font-family:Arial,sans-serif;line-height:1.7">${message}</div>`,
     text: message
   });
-
-  res.json({ success: true, count: recipients.length });
+  res.json({ success: true, message: "Bulk email sent", count: recipients.length });
 }
 
 export async function getMessages(req, res) {
@@ -195,9 +176,8 @@ export async function getMessages(req, res) {
 export async function resolveMessage(req, res) {
   const data = await SupportMessage.findByIdAndUpdate(
     req.params.messageId,
-    { status: "resolved", adminNotes: req.body?.adminNotes || "", resolvedAt: new Date() },
+    { status: "resolved", resolvedAt: new Date(), adminNotes: req.body.adminNotes || "" },
     { new: true }
   );
-  if (!data) return res.status(404).json({ success: false, message: "Message not found" });
   res.json({ success: true, data });
 }
