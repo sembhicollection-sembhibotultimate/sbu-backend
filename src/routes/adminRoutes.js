@@ -5,10 +5,10 @@ import {
   deleteLicense,
   deleteUser,
   getLicenses,
-  getUserLicenses,
-  getUserDetail,
-  getUsers,
   getMessages,
+  getUserDetail,
+  getUserLicenses,
+  getUsers,
   resolveMessage,
   sendBulkMessageToUsers,
   sendMessageToUser,
@@ -24,8 +24,10 @@ router.get("/users", getUsers);
 router.get("/users/:id", getUserDetail);
 router.put("/users/:id", updateUser);
 router.patch("/users/:id/toggle", toggleUserStatus);
+router.post("/users/:id/toggle-status", toggleUserStatus);
 router.delete("/users/:id", deleteUser);
 router.post("/users/:id/license", createLicenseForUser);
+router.post("/users/:id/licenses", createLicenseForUser);
 router.get("/users/:id/licenses", getUserLicenses);
 router.post("/users/:id/message", sendMessageToUser);
 

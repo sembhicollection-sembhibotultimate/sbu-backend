@@ -1,8 +1,8 @@
 import express from "express";
 import Stripe from "stripe";
 import PaymentRecord from "../models/PaymentRecord.js";
-import { createOrRenewSubscriptionLicense, deactivateLicenseBySubscriptionId } from "../services/licenseService.js";
-import { sendLicenseEmail } from "../services/emailService.js";
+import { createOrRenewLicenseFromPayment, deactivateLicenseBySubscriptionId } from "../services/licenseService.js";
+import { sendLicenseIssuedEmail } from "../services/emailService.js";
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -21,21 +21,14 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object;
-        const email =
-          session.customer_details?.email ||
-          session.customer_email ||
-          session.metadata?.email ||
-          "";
+        const email = session.customer_details?.email || session.customer_email || session.metadata?.email || "";
         const fullName = session.customer_details?.name || session.metadata?.fullName || "";
         const stripeCustomerId = session.customer || "";
         const stripeSubscriptionId = session.subscription || "";
         const plan = session.metadata?.plan || "monthly";
 
-        const { user, license } = await createOrRenewSubscriptionLicense({
-          email,
-          stripeCustomerId,
-          stripeSubscriptionId,
-          plan
+        const { user, license } = await createOrRenewLicenseFromPayment({
+          email, stripeCustomerId, stripeSubscriptionId, plan
         });
 
         await PaymentRecord.create({
@@ -46,13 +39,16 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
           stripeSubscriptionId,
           amount: session.amount_total ? session.amount_total / 100 : 0,
           currency: session.currency || "usd",
+          plan,
+          couponCode: session.metadata?.couponCode || "",
           paymentStatus: "paid"
         });
 
-        await sendLicenseEmail({
+        await sendLicenseIssuedEmail({
           to: email,
           fullName,
           licenseKey: license.licenseKey,
+          plan,
           portalUrl: process.env.PORTAL_URL || "https://sembhibotultimate.com/portal.html"
         });
         break;
@@ -63,12 +59,9 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         const email = invoice.customer_email || invoice.customer_details?.email || "";
         const stripeCustomerId = invoice.customer || "";
         const stripeSubscriptionId = invoice.subscription || "";
-        if (stripeSubscriptionId && email) {
-          await createOrRenewSubscriptionLicense({
-            email,
-            stripeCustomerId,
-            stripeSubscriptionId,
-            plan: "monthly"
+        if (email && stripeSubscriptionId) {
+          await createOrRenewLicenseFromPayment({
+            email, stripeCustomerId, stripeSubscriptionId, plan: "monthly"
           });
         }
         break;
@@ -80,23 +73,18 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         break;
       }
 
-      case "customer.subscription.updated": {
-        const subscription = event.data.object;
-        if (subscription.status === "canceled" || subscription.cancel_at_period_end) {
-          await deactivateLicenseBySubscriptionId(subscription.id);
-        }
-        break;
-      }
-
       default:
         break;
     }
-
     return res.json({ received: true });
   } catch (error) {
     console.error("Stripe webhook processing error:", error);
     return res.status(500).json({ received: false, message: error.message });
   }
+});
+
+router.get("/webhook", (req, res) => {
+  res.json({ success: true, message: "Stripe webhook endpoint is ready. Use POST from Stripe." });
 });
 
 export default router;

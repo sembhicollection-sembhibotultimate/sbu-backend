@@ -13,10 +13,10 @@ import couponRoutes from "./routes/couponRoutes.js";
 import legalRoutes from "./routes/legalRoutes.js";
 import checkoutRoutes from "./routes/checkoutRoutes.js";
 import portalRoutes from "./routes/portalRoutes.js";
+import memberPortalRoutes from "./routes/memberPortalRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import adminResourcesRoutes from "./routes/adminResourcesRoutes.js";
-import memberPortalRoutes from "./routes/memberPortalRoutes.js";
 import licenseRoutes from "./routes/licenseRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import stripeWebhookRoutes from "./routes/stripeWebhookRoutes.js";
@@ -25,21 +25,15 @@ dotenv.config();
 const app = express();
 
 await connectDB();
-try {
-  await seedDefaults();
-} catch (err) {
-  console.warn("Seed defaults skipped:", err.message);
-}
+try { await seedDefaults(); } catch (err) { console.warn("Seed defaults skipped:", err.message); }
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(",").map(v => v.trim()) : "*",
-    credentials: true
-  })
-);
+app.use(cors({
+  origin: process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(",").map(v => v.trim()) : "*",
+  credentials: true
+}));
 
 app.use("/api/stripe", stripeWebhookRoutes);
 app.use(express.json({ limit: "10mb" }));
@@ -65,7 +59,7 @@ app.use("/api/reviews", reviewRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).json({ success: false, message: "Server error" });
+  res.status(err.status || 500).json({ success: false, message: err.message || "Server error" });
 });
 
 const PORT = process.env.PORT || 10000;

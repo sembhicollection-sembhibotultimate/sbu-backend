@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema(
     phone: { type: String, default: "" },
     address: { type: String, default: "" },
     country: { type: String, default: "" },
+    avatarUrl: { type: String, default: "" },
     plan: { type: String, default: "monthly" },
     status: { type: String, enum: ["active", "inactive", "disabled"], default: "active" },
     stripeCustomerId: { type: String, default: "" },
@@ -34,4 +35,4 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("User", userSchema);
+export default mongoose.models.User || mongoose.model("User", userSchema);
