@@ -5,8 +5,8 @@ import OfferCard from "../models/OfferCard.js";
 import PaymentRecord from "../models/PaymentRecord.js";
 import LegalDocument from "../models/LegalDocument.js";
 
-function startOfDay(d=new Date()){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
-function daysAgo(n){ const d = startOfDay(new Date()); d.setDate(d.getDate()-n); return d; }
+function startOfDay(d = new Date()) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+function daysAgo(n) { const d = startOfDay(new Date()); d.setDate(d.getDate()-n); return d; }
 
 export async function getDashboardSummary(req, res) {
   const today = startOfDay();
@@ -27,8 +27,8 @@ export async function getDashboardSummary(req, res) {
     User.countDocuments({ status: "active" }),
     User.countDocuments({ status: "inactive" }),
     User.countDocuments({ status: "disabled" }),
-    User.find().sort({ createdAt: -1 }).limit(8).select("fullName email status plan createdAt"),
-    PaymentRecord.find().sort({ createdAt: -1 }).limit(8).select("customerEmail amount paymentStatus createdAt"),
+    User.find().sort({ createdAt: -1 }).limit(10).select("fullName email status plan createdAt"),
+    PaymentRecord.find().sort({ createdAt: -1 }).limit(10).select("customerEmail amount paymentStatus createdAt"),
     User.countDocuments({ createdAt: { $gte: today } }),
     User.countDocuments({ createdAt: { $gte: weekStart } }),
     User.countDocuments({ createdAt: { $gte: monthStart } })
@@ -38,31 +38,27 @@ export async function getDashboardSummary(req, res) {
     PaymentRecord.aggregate([{ $match: { paymentStatus: "paid" } }, { $group: { _id: null, total: { $sum: "$amount" } } }]),
     PaymentRecord.aggregate([{ $match: { paymentStatus: "paid", createdAt: { $gte: today } } }, { $group: { _id: null, total: { $sum: "$amount" } } }]),
     PaymentRecord.aggregate([{ $match: { paymentStatus: "paid", createdAt: { $gte: weekStart } } }, { $group: { _id: null, total: { $sum: "$amount" } } }]),
-    PaymentRecord.aggregate([{ $match: { paymentStatus: "paid", createdAt: { $gte: monthStart } } }, { $group: { _id: null, total: { $sum: "$amount" } } }]),
+    PaymentRecord.aggregate([{ $match: { paymentStatus: "paid", createdAt: { $gte: monthStart } } }, { $group: { _id: null, total: { $sum: "$amount" } } }])
   ]);
 
-  res.json({
-    success: true,
-    data: {
-      stats: {
-        totalUsers,
-        activeLicenses,
-        totalCoupons,
-        totalOffers,
-        totalLegalDocs: legalDocs,
-        totalRevenue: totalRevenueAgg[0]?.total || 0,
-        todayRevenue: todayRevenueAgg[0]?.total || 0,
-        weeklyRevenue: weeklyRevenueAgg[0]?.total || 0,
-        monthlyRevenue: monthlyRevenueAgg[0]?.total || 0,
-        activeUsers,
-        inactiveUsers,
-        disabledUsers,
-        todayUsers,
-        weeklyUsers,
-        monthlyUsers
-      },
-      recentUsers,
-      recentPayments
-    }
-  });
+  const stats = {
+    totalUsers, activeLicenses, totalCoupons, totalOffers, legalDocs,
+    activeUsers, inactiveUsers, disabledUsers,
+    todayUsers, weeklyUsers, monthlyUsers,
+    totalRevenue: totalRevenueAgg?.[0]?.total || 0,
+    todayRevenue: todayRevenueAgg?.[0]?.total || 0,
+    weeklyRevenue: weeklyRevenueAgg?.[0]?.total || 0,
+    monthlyRevenue: monthlyRevenueAgg?.[0]?.total || 0
+  };
+
+  res.json({ success: true, data: { stats, recentUsers, recentPayments } });
+}
+
+export async function exportDashboardCsv(req, res) {
+  const payments = await PaymentRecord.find().sort({ createdAt: -1 }).limit(500).select("customerEmail amount paymentStatus createdAt");
+  const rows = [["Email","Amount","Status","Created At"], ...payments.map(p => [p.customerEmail || "", p.amount || 0, p.paymentStatus || "", new Date(p.createdAt).toISOString()])];
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", 'attachment; filename="sbu-dashboard-payments.csv"');
+  res.send(csv);
 }

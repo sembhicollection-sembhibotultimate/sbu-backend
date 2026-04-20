@@ -1,17 +1,20 @@
 import express from "express";
-import { validateLicense } from "../controllers/licenseController.js";
+import { adminAuth } from "../middleware/adminAuth.js";
+import { validateLicense, listLicenses, createLicense, updateLicense, removeLicense } from "../controllers/licenseController.js";
 
 const router = express.Router();
 
-// Bot normally POST request karega
 router.post("/validate", validateLicense);
-
-// Optional GET health-style test
 router.get("/validate", (req, res) => {
   res.json({
     success: true,
     message: "License validate route ready. Use POST with licenseKey."
   });
 });
+
+router.get("/", adminAuth, listLicenses);
+router.post("/", adminAuth, createLicense);
+router.put("/:id", adminAuth, updateLicense);
+router.delete("/:id", adminAuth, removeLicense);
 
 export default router;

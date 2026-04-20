@@ -1,9 +1,11 @@
 import License from "../models/License.js";
+import User from "../models/User.js";
+import { generateLicenseKey } from "../utils/generateLicenseKey.js";
+import { sendLicenseIssuedEmail } from "../services/emailService.js";
 
 export const validateLicense = async (req, res) => {
   try {
     const { licenseKey, machineId, hwid } = req.body;
-
     const finalMachineId = machineId || hwid || "";
 
     if (!licenseKey || !licenseKey.trim()) {
@@ -17,11 +19,7 @@ export const validateLicense = async (req, res) => {
 
     const cleanKey = licenseKey.trim();
 
-    // OWNER KEY DIRECT ALLOW
-    if (
-      process.env.OWNER_LICENSE_KEY &&
-      cleanKey === process.env.OWNER_LICENSE_KEY
-    ) {
+    if (process.env.OWNER_LICENSE_KEY && cleanKey === process.env.OWNER_LICENSE_KEY) {
       return res.json({
         success: true,
         message: "Owner license valid",
@@ -34,9 +32,7 @@ export const validateLicense = async (req, res) => {
       });
     }
 
-    // NORMAL LICENSE CHECK
     const license = await License.findOne({ licenseKey: cleanKey });
-
     if (!license) {
       return res.status(404).json({
         success: false,
@@ -57,8 +53,8 @@ export const validateLicense = async (req, res) => {
       });
     }
 
-    // Expiry check
-    if (license.validUntil && new Date(license.validUntil) < new Date()) {
+    const expiryField = license.expiresAt || license.validUntil;
+    if (expiryField && new Date(expiryField) < new Date()) {
       return res.status(403).json({
         success: false,
         message: "License expired",
@@ -68,11 +64,8 @@ export const validateLicense = async (req, res) => {
       });
     }
 
-    // HWID / Machine lock check
-    const savedMachine =
-      license.machineId || license.machineName || license.hwid || "";
+    const savedMachine = license.machineId || license.machineName || license.hwid || "";
 
-    // If no machine stored yet, first activation binds it
     if (!savedMachine && finalMachineId) {
       license.machineId = finalMachineId;
       license.hwid = finalMachineId;
@@ -92,7 +85,6 @@ export const validateLicense = async (req, res) => {
       });
     }
 
-    // If machine exists, it must match
     if (savedMachine && finalMachineId && savedMachine !== finalMachineId) {
       return res.status(403).json({
         success: false,
@@ -126,4 +118,60 @@ export const validateLicense = async (req, res) => {
       valid: false
     });
   }
+};
+
+export const listLicenses = async (req, res) => {
+  const data = await License.find().populate("userId", "fullName email").sort({ createdAt: -1 });
+  res.json({ success: true, data });
+};
+
+export const createLicense = async (req, res) => {
+  const { userId = "", productName = "Sembhi Bot Ultimate", plan = "monthly", status = "active", hwid = "", expiresAt = "" } = req.body || {};
+  let user = null;
+  if (userId) user = await User.findById(userId);
+  const item = await License.create({
+    userId: user?._id || undefined,
+    productName,
+    plan,
+    status,
+    hwid,
+    licenseKey: generateLicenseKey("SBU"),
+    expiresAt: expiresAt ? new Date(expiresAt) : undefined
+  });
+
+  if (user?.email) {
+    try:
+      pass
+    except:
+      pass
+  }
+
+  if (user?.email) {
+    try {
+      await sendLicenseIssuedEmail({
+        to: user.email,
+        fullName: user.fullName || "",
+        licenseKey: item.licenseKey,
+        plan,
+        portalUrl: process.env.PORTAL_URL || "https://sembhibotultimate.com/portal.html"
+      });
+    } catch (e) {
+      console.warn("license email skipped:", e.message);
+    }
+  }
+
+  res.json({ success: true, message: "License created", data: item });
+};
+
+export const updateLicense = async (req, res) => {
+  const payload = { ...req.body };
+  if (payload.expiresAt === "") payload.expiresAt = null;
+  const data = await License.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
+  if (!data) return res.status(404).json({ success: false, message: "License not found" });
+  res.json({ success: true, message: "License updated", data });
+};
+
+export const removeLicense = async (req, res) => {
+  await License.findByIdAndDelete(req.params.id);
+  res.json({ success: true, message: "License deleted" });
 };
