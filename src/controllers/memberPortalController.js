@@ -8,6 +8,10 @@ import LearningVideo from "../models/LearningVideo.js";
 import Notification from "../models/Notification.js";
 import { sendSimpleEmail } from "../services/emailService.js";
 
+function normalizePhone(phone = "") {
+  return String(phone).replace(/\s+/g, "").trim();
+}
+
 export async function getPortalData(req, res) {
   const email = (req.query.email || req.headers["x-user-email"] || "").toLowerCase().trim();
   if (!email) return res.status(400).json({ success: false, message: "Email required" });
@@ -30,11 +34,23 @@ export async function updatePortalProfile(req, res) {
   const email = (req.body.email || "").toLowerCase().trim();
   const user = await User.findOne({ email });
   if (!user) return res.status(404).json({ success: false, message: "User not found" });
-  const allowed = ["fullName", "phone", "country", "address"];
-  for (const key of allowed) if (key in req.body) user[key] = req.body[key];
-  if (req.body.password) user.passwordHash = await bcrypt.hash(req.body.password, 10);
+
+  const newPhone = normalizePhone(req.body.phone || "");
+  if (newPhone) {
+    const existingByPhone = await User.findOne({ phone: newPhone, _id: { $ne: user._id } });
+    if (existingByPhone) {
+      return res.status(400).json({ success: false, message: "This mobile number is already registered" });
+    }
+    user.phone = newPhone;
+  }
+
+  ["fullName","country","address"].forEach(key => { if (key in req.body) user[key] = req.body[key]; });
+  if (req.body.password && String(req.body.password).trim()) {
+    user.passwordHash = await bcrypt.hash(String(req.body.password).trim(), 10);
+  }
   await user.save();
-  res.json({ success: true, data: user });
+
+  res.json({ success: true, data: { fullName: user.fullName, phone: user.phone, address: user.address, country: user.country } });
 }
 
 export async function updateAvatar(req, res) {
@@ -49,11 +65,12 @@ export async function updateAvatar(req, res) {
 
 export async function createSupportMessage(req, res) {
   const { email, subject, message, type = "general" } = req.body;
-  const user = await User.findOne({ email: email?.toLowerCase().trim() });
+  const cleanEmail = email?.toLowerCase().trim();
+  const user = await User.findOne({ email: cleanEmail });
 
   const doc = await SupportMessage.create({
     userId: user?._id || null,
-    email,
+    email: cleanEmail,
     fullName: user?.fullName || "",
     subject,
     message,
@@ -67,10 +84,10 @@ export async function createSupportMessage(req, res) {
       <div style="font-family:Arial,sans-serif;line-height:1.7">
         <h3>New member message</h3>
         <p><strong>Name:</strong> ${user?.fullName || ""}</p>
-        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Email:</strong> ${cleanEmail}</p>
         <p><strong>Type:</strong> ${type}</p>
         <p><strong>Subject:</strong> ${subject}</p>
-        <div>${message}</div>
+        <div><strong>Message:</strong><br>${message}</div>
       </div>
     `
   });

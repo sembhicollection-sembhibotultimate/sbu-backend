@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema(
     fullName: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
-    phone: { type: String, default: "" },
+    phone: { type: String, default: "", trim: true, index: true },
     address: { type: String, default: "" },
     country: { type: String, default: "" },
     avatarUrl: { type: String, default: "" },

@@ -7,6 +7,10 @@ import Notification from "../models/Notification.js";
 import { generateLicenseKey } from "../utils/generateLicenseKey.js";
 import { sendBulkEmail, sendLicenseIssuedEmail, sendSimpleEmail } from "../services/emailService.js";
 
+function normalizePhone(phone = "") {
+  return String(phone).replace(/\s+/g, "").trim();
+}
+
 export async function getUsers(req, res) {
   const data = await User.find().sort({ createdAt: -1 }).select("-passwordHash");
   res.json({ success: true, data });
@@ -25,20 +29,11 @@ export async function getUserDetail(req, res) {
   res.json({
     success: true,
     data: {
-      user,
-      licenses,
-      payments,
-      messages,
-      notifications,
+      user, licenses, payments, messages, notifications,
       agreement: {
         acceptance: {
-          terms: acc.termsAccepted,
-          privacy: acc.privacyAccepted,
-          refund: acc.refundAccepted,
-          risk: acc.riskAccepted,
-          acceptedAt: acc.acceptedAt,
-          ip: acc.ipAddress,
-          userAgent: acc.userAgent
+          terms: acc.termsAccepted, privacy: acc.privacyAccepted, refund: acc.refundAccepted, risk: acc.riskAccepted,
+          acceptedAt: acc.acceptedAt, ip: acc.ipAddress, userAgent: acc.userAgent
         },
         signatureTypedName: acc.signatureTypedName || "",
         signatureImage: acc.signatureDataUrl || "",
@@ -51,6 +46,11 @@ export async function getUserDetail(req, res) {
 export async function updateUser(req, res) {
   const update = { ...req.body };
   delete update.passwordHash;
+  if (update.phone) {
+    const existingByPhone = await User.findOne({ phone: normalizePhone(update.phone), _id: { $ne: req.params.id } });
+    if (existingByPhone) return res.status(400).json({ success: false, message: "This mobile number is already registered" });
+    update.phone = normalizePhone(update.phone);
+  }
   if (update.password) {
     update.passwordHash = await bcrypt.hash(update.password, 10);
     delete update.password;
@@ -94,10 +94,7 @@ export async function createLicenseForUser(req, res) {
   user.plan = plan;
   await user.save();
   await sendLicenseIssuedEmail({
-    to: user.email,
-    fullName: user.fullName,
-    licenseKey: data.licenseKey,
-    plan,
+    to: user.email, fullName: user.fullName, licenseKey: data.licenseKey, plan,
     portalUrl: process.env.PORTAL_URL || "https://sembhibotultimate.com/portal.html"
   });
   res.json({ success: true, data });
@@ -130,8 +127,7 @@ export async function sendMessageToUser(req, res) {
   if (!user) return res.status(404).json({ success: false, message: "User not found" });
   const { subject, message } = req.body;
   await sendSimpleEmail({
-    to: user.email,
-    subject,
+    to: user.email, subject,
     html: `<div style="font-family:Arial,sans-serif;line-height:1.7">${message}</div>`,
     text: message
   });
@@ -144,8 +140,7 @@ export async function sendBulkMessageToUsers(req, res) {
   const users = await User.find({ status: "active" }, "email _id");
   const recipients = users.map((u) => u.email).filter(Boolean);
   await sendBulkEmail({
-    recipients,
-    subject,
+    recipients, subject,
     html: `<div style="font-family:Arial,sans-serif;line-height:1.7">${message}</div>`,
     text: message
   });
